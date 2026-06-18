@@ -1,0 +1,933 @@
+Usecase
+
+UC001
+
+@startuml
+title **UC-001 실외 대시보드 조회**\n(로그인/비로그인 공통)
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  Shadowing true
+}
+
+' 주액터 (왼쪽)
+actor "사용자\n(로그인 / 비로그인)" as User
+
+rectangle "EcoSense 시스템" #LightBlue {
+
+  usecase "**실외 대시보드 조회**" as UC001 <<main>>
+
+  usecase "기상청 Open API 호출" as CallWeatherAPI
+  usecase "인앱 알림 표시\n(AQI·위험도 메시지)" as ShowInAppNotification
+  usecase "대시보드 수동 새로고침" as ManualRefresh
+  usecase "실외 환경 데이터 표시\n(온도, AQI, UV, 그래프 등)" as DisplayData
+}
+
+' 부액터 (오른쪽 - 외부 시스템은 보통 사각형 모양으로 표현하기도 함)
+actor "기상청 Open API\n(외부 시스템)" as WeatherSystem
+
+' [주액터 인터랙션]
+User --> UC001
+User --> ManualRefresh
+
+' [내부 기본 흐름]
+UC001 ..> DisplayData : <<include>>
+
+' [조건부 확장 (Alternative Flow)]
+UC001 <.. CallWeatherAPI : <<extend>> 
+note on link
+  <b>Condition:</b>
+  캐시 데이터가 없거나 만료된 경우
+  (10분~1시간 주기 캐싱 레이어)
+end note
+
+UC001 <.. ShowInAppNotification : <<extend>>
+note on link
+  <b>Condition:</b>
+  AQI 위험 단계 진입 시
+end note
+
+ManualRefresh ..> UC001 : <<include>> : (대시보드 재조회)
+
+' [부액터 인터랙션]
+' 기상청 API 호출 유스케이스가 외부 기상청 시스템과 상호작용함을 명시
+CallWeatherAPI --> WeatherSystem
+
+note right of UC001
+  <b>[Main Flow]</b>
+  1. 사용자가 실외 탭 선택
+  2. 시스템이 Geolocation API로 위치 획득
+  3. 로컬 저장소 캐시 유효성 검증
+  4. 최신 또는 캐시 데이터 표시
+  • PC / 모바일 반응형 지원
+end note
+@enduml
+
+
+
+UC002
+
+@startuml
+title **UC-002 실내 대시보드 조회**\n(로그인/비로그인 공통)
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  Shadowing true
+}
+
+' 주액터 & 부액터
+actor "사용자\n(로그인 / 비로그인)" as User
+actor "Xiaomi 센서\n(Bluetooth LE)" as XiaomiSensor
+
+rectangle "EcoSense 시스템" #LightBlue {
+  usecase "**실내 대시보드 조회**" as UC002 <<main>>
+  usecase "실내 환경 데이터 표시\n(온도, 습도, AQI 등)" as DisplayData
+  usecase "Web Bluetooth 연결" as ConnectBluetooth
+  usecase "인앱 알림 표시\n(습도 40% 이하 등)" as ShowInAppNotification
+  usecase "대시보드 수동 새로고침" as ManualRefresh
+  usecase "Bluetooth 연결 실패 처리\n(수동 입력/캐시 표시)" as HandleBluetoothFailure
+}
+
+' [주액터 인터랙션]
+User --> UC002
+User --> ManualRefresh
+
+' [내부 필수 흐름 (Include)]
+' 실내 대시보드를 조회하면 무조건 데이터를 표시하고 블루투스 연결을 시도함
+UC002 ..> DisplayData : <<include>>
+UC002 ..> ConnectBluetooth : <<include>>
+
+' [조건부 확장 및 재조회 (Extend / Include)]
+UC002 <.. ShowInAppNotification : <<extend>>
+note on link
+  <b>Condition:</b>
+  습도 40% 이하, 공기질 위험 등
+  기준 충족 시 자동 코멘트 출력
+end note
+
+ManualRefresh ..> UC002 : <<include>> : (대시보드 재조회)
+
+' [예외 흐름 (Exception Extend)]
+' 블루투스 연결 과정에서 문제 발생 시 실패 처리 유스케이스로 확장
+ConnectBluetooth <.. HandleBluetoothFailure : <<extend>>
+note on link
+  <b>Condition (오류 발생 시):</b>
+  • 브라우저 미지원 (Chrome/Edge 외)
+  • 센서 전원 OFF 또는 미연결
+  • 사용자가 권한 거부 / 타임아웃
+end note
+
+' 예외 처리 후, 기존 캐시 데이터 표시 처리로 연계
+HandleBluetoothFailure ..> DisplayData : <<include>> : (마지막 캐시 표시)
+
+' [부액터 인터랙션]
+ConnectBluetooth --> XiaomiSensor
+
+note right of UC002
+  <b>[Main Flow]</b>
+  1. 사용자가 실내 탭 선택
+  2. Web Bluetooth로 센서 연결 시도
+  3. 5~10초 주기 실시간 데이터 수신
+  4. 실내 환경 데이터 화면 렌더링
+  • PC / 모바일 반응형 지원
+end note
+@enduml
+
+
+
+UC003
+
+@startuml
+title **UC-003 수면/소음 측정 (모드 선택)**\n(로그인/비로그인 공통)
+skinparam actorStyle awesome
+
+' [시각 최적화] 컴포넌트 색상 밸런스 조정
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  Shadowing true
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #FBC02D
+}
+
+actor "사용자\n(로그인 / 비로그인)" as User
+actor "브라우저 마이크" as Microphone
+
+rectangle "EcoSense 시스템" #LightBlue {
+  usecase "**수면/소음 측정\n(모드 선택)**" as UC003 <<main>>
+
+  usecase "마이크 접근 및 권한 확인" as AccessMicrophone
+  usecase "실시간 소음 레벨 표시\n(dB + 그래프)" as DisplayNoise
+  usecase "수면 측정 시작 및 종료\n(사용자 직접 버튼)" as StartSleepMode
+  
+  ' 정보량이 많은 조건은 동그라미 내부에 이쁘게 배치해서 외부 노트를 줄임!
+  usecase "스파이크 감지 및 저장\n---\n<size:11><color:gray>+15dB 이상 & 2초 지속 시</color></size>" as DetectAndSaveSpike
+  usecase "수면 종료 후 분석 및 청취\n---\n<size:11><color:gray>사이클, 스파이크 비율, 피드백</color></size>" as AnalyzeAndListen
+  
+  usecase "마이크 접근 실패 처리" as HandleMicFailure
+}
+
+' 주액터 인터랙션
+User --> UC003
+
+' 1. 공통 필수 흐름
+UC003 ..> AccessMicrophone : <<include>>
+
+' 2. 일반 소음 측정 모드 (화살표 방향 교정으로 UC003을 중심으로 이쁘게 정렬)
+UC003 <.. DisplayNoise : <<extend>>
+note on link
+  <b>Condition:</b>
+  일반 소음 측정 모드 선택 시
+end note
+
+' 3. 수면 측정 모드
+UC003 <.. StartSleepMode : <<extend>>
+note on link
+  <b>Condition:</b>
+  수면 측정 모드 선택 시
+end note
+
+' 수면 모드 하위 구조
+StartSleepMode ..> DetectAndSaveSpike : <<include>>
+StartSleepMode ..> AnalyzeAndListen : <<include>>
+
+' 4. 예외 흐름 (화살표 방향 교정 및 링크 위 노트 배치)
+AccessMicrophone <.. HandleMicFailure : <<extend>>
+note on link
+  <b>Condition:</b>
+  마이크 권한 거부 / 연결 실패
+end note
+
+HandleMicFailure ..> DisplayNoise : <<include>>
+
+' [하드웨어 인터페이스선 정렬] 
+' 대시(---)를 늘려 마이크 액터를 다이어그램 최하단에 정갈하게 배치
+AccessMicrophone ---> Microphone
+DisplayNoise ---> Microphone
+DetectAndSaveSpike ---> Microphone
+
+' 메인 흐름 설명 요약
+note left of UC003
+  <b>[Main Flow]</b>
+  1. 탭 진입 → 마이크 확인
+  2. 모드 선택 (일반 / 수면)
+end note
+@enduml
+
+
+
+UC004
+
+@startuml
+title **UC-004 PDF 보고서 생성**\n(로그인 사용자 전용)
+skinparam actorStyle awesome
+
+' [시각 최적화] 테두리와 배경 파스텔톤 밸런스 조정
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  Shadowing true
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #FBC02D
+}
+
+' 주액터 배치
+actor "사용자\n(로그인 상태)" as User
+
+rectangle "EcoSense 시스템" #LightBlue {
+  usecase "**PDF 보고서 생성 요청**" as UC004 <<main>>
+
+  usecase "주간/월간 기간 선택" as SelectPeriod
+  
+  ' 정보량이 많은 보고서 스펙은 유스케이스 내부에 깔끔하게 콤팩트 배치!
+  usecase "PDF 보고서 생성 및 다운로드\n---\n<size:11><color:gray>실내·외 환경 요약 / 수면 질 분석 / 차트 포함</color></size>" as GeneratePDF
+  
+  usecase "데이터 부족 예외 처리\n(안내 메시지 표시)" as HandleDataShortage
+}
+
+' 주액터 인터랙션
+User --> UC004
+
+' [Main Flow 설계 구조화]
+' 1. 보고서 메뉴를 선택하면 먼저 기간 선택 유스케이스를 필수로 포함함
+UC004 ..> SelectPeriod : <<include>>
+
+' 2. 기간이 선택되면 조건에 따라 PDF 생성이 진행됨
+SelectPeriod ..> GeneratePDF : <<include>>
+
+' [Exception Flow 설계 구조화]
+' 명세서 v1.7 스펙: 선택된 기간의 환경 데이터가 부족할 때 가동되는 예외 흐름
+GeneratePDF <.. HandleDataShortage : <<extend>>
+note on link
+  <b>Condition (오류 발생 시):</b>
+  선택한 기간의 누적 데이터가 
+  기준치 미만으로 부족한 경우
+end note
+
+' 메인 흐름 요약 캡션은 메인 유스케이스 왼쪽에 밀착 배치
+note left of UC004
+  <b>[Main Flow]</b>
+  1. 보고서 탭 진입
+  2. 주간/월간 기간 선택
+  3. 기간 내 데이터 수집/집계
+  4. PDF 빌드 및 파일 다운로드
+  ---\n<b>Precondition:</b>
+  • 로그인 상태 필수
+end note
+
+@enduml
+
+
+
+
+UC005
+
+@startuml
+title **UC-005 로그인 및 계정 관리**\n(이메일 + 비밀번호 기반)
+skinparam actorStyle awesome
+
+' [시각 최적화] 컴포넌트 파스텔톤 컬러 밸런스 조정
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  Shadowing true
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #FBC02D
+}
+
+' 주액터 배치
+actor "사용자\n(로그인 / 비로그인)" as User
+
+rectangle "EcoSense 시스템" #LightBlue {
+  usecase "**로그인 및 계정 관리**" as UC005 <<main>>
+
+  usecase "로그인 상태 확인" as CheckLoginStatus
+  usecase "회원가입\n(이메일 + 비밀번호)" as Signup
+  usecase "로그인\n(이메일 + 비밀번호)" as Login
+  usecase "로그아웃" as Logout
+  
+  ' 부가 정보는 유스케이스 내부에 배치해서 외부 노트를 과감히 제거!
+  usecase "크로스 디바이스 기록 동기화\n---\n<size:11><color:gray>모바일 ↔ PC 간 로컬 데이터 동기화</color></size>" as SyncData
+}
+
+' 주액터 인터랙션
+User --> UC005
+
+' 1. 계정 메뉴 진입 시 필수적으로 현재 세션 상태를 체크함
+UC005 ..> CheckLoginStatus : <<include>>
+
+' 2. 비로그인 상태일 때의 확장 (UML 표준 방향 교정 + 선 위 노트 배치)
+UC005 <.. Signup : <<extend>>
+note on link
+  <b>Condition:</b>
+  비로그인 상태에서 회원가입 선택 시
+end note
+
+UC005 <.. Login : <<extend>>
+note on link
+  <b>Condition:</b>
+  기존 계정으로 로그인 시
+  (실패 시 오류 메시지 표시)
+end note
+
+' 3. 로그인 성공 시 하위 흐름 필수 처리
+Login ..> SyncData : <<include>>
+
+' 4. 로그인 상태일 때의 확장
+UC005 <.. Logout : <<extend>>
+note on link
+  <b>Condition:</b>
+  로그인 상태에서 로그아웃 선택 시
+end note
+
+' 메인 플로우 요약 노트는 메인 유스케이스 왼쪽에 밀착 배치
+note left of UC005
+  <b>[Main Flow]</b>
+  1. 사용자 계정 메뉴 진입
+  2. 시스템이 로그인 상태 확인
+  3. 회원가입 또는 로그인 실행
+  4. 로그인 성공 시 기록 자동 동기화
+  ---\n• 비로그인(게스트) 상태 시
+    로컬 저장소(IndexedDB) 기반으로 작동
+end note
+@enduml
+
+
+---
+
+### EcoSense 아키텍처 개요
+
+#### 1. 전체 시스템 아키텍처
+
+EcoSense는 **클라이언트 중심 + 서버 보조** 구조로 설계한다. 실시간 오디오 처리와 센서 제어는 브라우저에서 직접 수행하며, 백엔드는 인증, 데이터 메타데이터 영속화, PDF 생성, 외부 API 프록시 역할을 담당한다.
+
+```
+[브라우저 (PWA)]
+├── Presentation Layer (React 18 + Vite + Tailwind CSS)
+│     ├── Web Audio API Pipeline
+│     │     ├── AnalyserNode (실시간 dB 모니터링)
+│     │     └── MediaRecorder (스파이크 발생 시 1~3분 오디오 Blob 버퍼링)
+│     ├── Web Bluetooth API (Xiaomi Mijia 센서)
+│     └── MediaDevices API (마이크 접근)
+│
+├── Client Data Layer
+│     ├── LocalStorage (설정 및 상태)
+│     └── IndexedDB
+│           ├── 게스트 측정 데이터
+│           └── 수면 스파이크 오디오 Blob (로컬 저장)
+│
+└── HTTPS + JWT (HttpOnly Secure Cookie)
+         │
+[Render - Backend]
+├── FastAPI
+│     ├── Auth Service
+│     ├── Sync Service (메타데이터 동기화)
+│     ├── PDF Report Service (reportlab)
+│     └── Weather Proxy + Cache (TTL 인메모리 캐싱)
+│
+[Data Layer]
+└── MariaDB
+      └── 로그인 사용자 메타데이터 (User, MeasurementSession, SpikeMetadata, WeatherCache)
+```
+
+#### 2. 레이어 상세 설명
+
+**1) Presentation Layer (Frontend)**
+- **기술 스택**: React 18 + Vite + Tailwind CSS + Chart.js
+- **배포**: Vercel
+- **주요 컴포넌트**:
+  - **Web Audio API Pipeline**
+    - `AnalyserNode`: 실시간 데시벨 모니터링
+    - `MediaRecorder`: 스파이크 발생 시 1~3분 분량 오디오를 Blob으로 버퍼링
+  - 5~10초 주기로 UI 갱신 및 필요 시 서버 메타데이터 동기화
+  - Web Bluetooth를 통한 실내 센서 데이터 수신
+
+**2) Client Data Layer**
+- **IndexedDB**에 **수면 스파이크 음성 데이터(Blob)**를 직접 저장
+- 로그인 사용자도 스파이크 오디오 Blob은 클라이언트에 보관하고, 서버에는 메타데이터만 동기화
+- **30일 경과 데이터 자동 삭제** 로직 적용 (클라이언트 측 만료 처리)
+
+**3) Business Logic Layer (Backend)**
+- **기술 스택**: FastAPI (Python)
+- **배포**: Render.com
+- 주요 역할: 인증, 메타데이터 동기화, PDF 생성, 기상청 API 프록시 + 캐싱
+
+**4) Data Layer**
+- **MariaDB** (Render): 로그인 사용자의 영속 데이터 저장
+  - 주요 엔티티: `User`, `MeasurementSession`, `SpikeMetadata`, `WeatherCache`
+  - **스파이크 음성 오디오 파일 자체는 저장하지 않음** (클라이언트 IndexedDB 보관)
+- **인메모리 캐시**: 기상청 데이터 `{지역_시간: 데이터}` 형태로 저장, TTL 10분~1시간 적용
+
+#### 3. 인증 토큰 관리
+
+- JWT는 **HttpOnly Secure Cookie** 방식으로 관리하여 XSS 공격 위험을 최소화한다.
+- (LocalStorage 저장 방식은 보안상 지양)
+
+#### 4. 주요 데이터 흐름 (수면 모드 스파이크)
+
+1. `AnalyserNode`로 실시간 데시벨 모니터링
+2. 기준 충족 시 `MediaRecorder`로 1~3분 오디오 Blob 생성
+3. Blob은 **IndexedDB에 로컬 저장**
+4. 스파이크 메타데이터(시각, dB)는 로그인 시 서버로 동기화
+5. 30일 경과 데이터는 클라이언트/서버 각각 자동 삭제 처리
+
+#### 5. 배포 구조
+
+- Frontend: Vercel
+- Backend + MariaDB: Render.com
+- JWT: HttpOnly Secure Cookie
+
+#### 6. 제약 사항 및 설계 판단
+
+- **데이터 보관 정책 (SRS FR-S004 반영)**:  
+  측정 데이터(IndexedDB의 스파이크 Blob 포함)는 **30일 경과 시 자동 삭제**된다. IndexedDB는 클라이언트 측 만료 로직으로, MariaDB는 스케줄러 또는 TTL 기반으로 처리한다.
+- **스파이크 음성 저장**: Render 무료 플랜의 Ephemeral File System 제약과 서버 부하를 고려하여, 오디오 Blob은 클라이언트 IndexedDB에 저장하고 메타데이터만 서버에 동기화하는 구조를 채택함.
+- **Web Bluetooth**: Chrome/Edge 전용 → UI에 안내 예정
+
+---
+
+@startuml
+skinparam component {
+    BackgroundColor<<frontend>> #E3F2FD
+    BackgroundColor<<backend>> #FFF3E0
+    BackgroundColor<<data>> #E8F5E9
+    BorderColor #37474F
+    FontSize 12
+}
+skinparam rectangle {
+    BackgroundColor #FAFAFA
+    BorderColor #90A4AE
+}
+skinparam database {
+    BackgroundColor #C8E6C9
+    BorderColor #2E7D32
+}
+skinparam arrow {
+    Color #455A64
+    Thickness 1.2
+}
+skinparam note {
+    BackgroundColor #FFFDE7
+    BorderColor #FBC02D
+    FontSize 11
+}
+
+title **EcoSense 아키텍처 개요** (Client-Centric + Server-Assisted)
+
+' ==================== Browser ====================
+rectangle "브라우저 (PWA)" as Browser {
+    
+    component "Presentation Layer\n(React 18)" as Presentation <<frontend>> {
+        component "Web Bluetooth API" as Bluetooth
+        component "Web Audio API Pipeline" as AudioPipeline {
+            component "MediaDevices API" as MediaDev
+            component "AnalyserNode\n(실시간 dB 모니터링)" as Analyser
+            component "MediaRecorder\n(스파이크 Blob 생성)" as Recorder
+        }
+    }
+    
+    component "Client Data Layer" as ClientData <<frontend>> {
+        component "LocalStorage" as LS
+        component "IndexedDB\n(스파이크 오디오 Blob)" as IDB
+    }
+}
+
+' ==================== Backend ====================
+rectangle "Render.com" as Render {
+    component "Backend (FastAPI)" as Backend <<backend>> {
+        component "Auth Service" as Auth
+        component "Sync Service" as Sync
+        component "PDF Report Service" as PDF
+        component "Weather Proxy + Cache" as Weather
+    }
+}
+
+' ==================== Database ====================
+database "MariaDB\n(User, MeasurementSession, SpikeMetadata)" as MariaDB <<data>>
+
+' ==================== External ====================
+component "Xiaomi Mijia 센서" as Xiaomi #F5F5F5
+cloud "기상청 Open API" as KMA #F5F5F5
+
+' ==================== 관계 ====================
+MediaDev --> Analyser : 오디오 스트림
+Analyser --> Recorder : 스파이크 감지 시 트리거
+Recorder --> IDB : Blob 로컬 저장
+
+Presentation --> ClientData
+Presentation --> Backend : HTTPS + JWT (HttpOnly Cookie)
+
+Sync --> MariaDB : 메타데이터 동기화
+Auth --> MariaDB
+PDF --> MariaDB
+
+Bluetooth --> Xiaomi
+Weather --> KMA : API 호출 (TTL 캐싱)
+
+note right of IDB
+  <b>클라이언트 저장 정책</b>
+  • 스파이크 음성 데이터는
+    IndexedDB에만 저장
+  • 30일 경과 시 자동 삭제
+end note
+
+note right of Weather
+  인메모리 캐시 (TTL 10분~1시간)
+end note
+
+note right of MariaDB
+  <b>30일 데이터 만료 정책</b>
+  스케줄러 기반 자동 삭제
+end note
+@enduml
+
+---
+
+@startuml EcoSense_Class_Diagram
+title **EcoSense 클래스 다이어그램 (Domain Model)**
+
+skinparam class {
+    BackgroundColor<<entity>> #E8F5E9
+    BorderColor #2E7D32
+    FontSize 13
+}
+skinparam note {
+    BackgroundColor #FFFDE7
+    BorderColor #FBC02D
+}
+
+class User <<entity>> {
+    + id : BigInt [PK]
+    + email : String
+    + password_hash : String
+    + created_at : DateTime
+}
+
+class MeasurementSession <<entity>> {
+    + id : BigInt [PK]
+    + type : String // OUTDOOR, INDOOR, SLEEP
+    + started_at : DateTime
+    + ended_at : DateTime
+}
+
+class Spike <<entity>> {
+    + id : BigInt [PK]
+    + detected_at : DateTime
+    + db_level : Float
+    + duration_sec : Integer
+}
+
+class ReportHistory <<entity>> {
+    + id : BigInt [PK]
+    + period : String // WEEKLY, MONTHLY
+    + summary_text : Text
+    + created_at : DateTime
+}
+
+' 관계선 (FK 필드 제거 → UML 정석)
+User "1" *-down- "0..*" MeasurementSession : owns
+User "1" *-down- "0..*" ReportHistory : owns
+MeasurementSession "1" *-down- "0..*" Spike : contains
+
+note right of MeasurementSession
+    <b>[세션 통합 정책]</b>
+    • 실내/실외/수면 공통 마스터 세션
+    • IndoorLog 등은 필요 시 추후 추가 가능
+end note
+
+note right of Spike
+    <b>[데이터 만료 정책 (SRS FR-S004)]</b>
+    • 30일 경과 시 백엔드 스케줄러에 의해
+      Spike 메타데이터 자동 삭제
+end note
+
+@enduml
+
+---
+
+Sequence Diagram
+
+uc001
+
+@startuml
+title **UC-001 실외 대시보드 조회 시퀀스 다이어그램** (개선 버전)
+autonumber
+
+skinparam sequence {
+    ArrowColor #37474F
+    ActorBorderColor #1565C0
+    ActorBackgroundColor #E3F2FD
+    LifelineBorderColor #455A64
+    LifelineBackgroundColor #FAFAFA
+    ParticipantBorderColor #2E7D32
+    ParticipantBackgroundColor #E8F5E9
+}
+
+actor "사용자" as User
+participant "브라우저\n(Frontend)" as Frontend
+participant "Backend\n(FastAPI)" as Backend
+participant "Weather Proxy\n+ TTL Cache" as Cache
+participant "기상청\nOpen API" as KMA
+
+User -> Frontend : 실외 탭 선택
+activate Frontend
+
+Frontend -> Backend : GET /api/outdoor?location=xxx\n(HTTPS + JWT Cookie)
+activate Backend
+
+Backend -> Cache : 캐시 확인 (TTL 체크)
+activate Cache
+
+alt 캐시 Hit
+    Cache --> Backend : 캐시된 데이터 반환
+    deactivate Cache
+    Backend --> Frontend : 캐시 데이터 응답
+    deactivate Backend
+
+else 캐시 Miss
+    Cache --> Backend : 캐시 미스
+    deactivate Cache
+
+    Backend -> KMA : 기상청 Open API 호출
+    activate KMA
+    KMA --> Backend : 최신 기상/대기질 데이터
+    deactivate KMA
+
+    Backend -> Cache : 데이터 캐시에 저장 (TTL 설정)
+    activate Cache
+    Cache --> Backend : 저장 완료
+    deactivate Cache
+
+    Backend --> Frontend : 최신 데이터 응답
+    deactivate Backend
+end
+
+Frontend --> User : 카드 + 그래프 렌더링
+deactivate Frontend
+
+note right of Cache
+    <b>TTL 정책</b>
+    • 기본 10분 ~ 1시간
+    • 지역 + 시간 기준 키로 관리
+end note
+
+note right of Backend
+    <b>주요 로직</b>
+    • JWT 검증 (HttpOnly Cookie)
+    • 인메모리 캐시 조회/저장
+    • 기상청 API 호출 시 Rate Limit 고려
+end note
+@enduml
+
+
+
+
+UC002
+
+@startuml
+title **UC-002 실내 대시보드 조회 시퀀스 다이어그램** (개선 버전)
+autonumber
+
+skinparam sequence {
+    ArrowColor #37474F
+    ActorBorderColor #1565C0
+    ActorBackgroundColor #E3F2FD
+    LifelineBorderColor #455A64
+    LifelineBackgroundColor #FAFAFA
+}
+
+actor "사용자" as User
+participant "브라우저\n(Frontend)" as Frontend
+participant "Web Bluetooth API" as Bluetooth
+participant "Xiaomi Mijia 센서" as Sensor
+participant "Backend\n(FastAPI)" as Backend
+
+User -> Frontend : 실내 탭 선택
+activate Frontend
+
+Frontend -> Bluetooth : Bluetooth 연결 요청\n(requestDevice + connect)
+activate Bluetooth
+
+alt 연결 성공
+    Bluetooth -> Sensor : BLE 연결 시도
+    activate Sensor
+    Sensor --> Bluetooth : 연결 완료
+    deactivate Sensor
+
+    Bluetooth --> Frontend : 연결 성공
+
+    loop 실시간 데이터 수신 (5~10초 주기)
+        Sensor -> Bluetooth : 온도/습도 데이터 전송 (BLE Notify)
+        activate Sensor
+        Bluetooth --> Frontend : 데이터 수신
+        deactivate Sensor
+
+        Frontend --> Frontend : 화면에 온습도 표시
+
+        alt 습도 40% 이하
+            Frontend --> Frontend : 인앱 코멘트 표시\n("보습을 권장합니다")
+        end
+    end
+
+    Frontend -> Backend : 측정 메타데이터 동기화 (선택)
+    activate Backend
+    Backend --> Frontend : 동기화 완료
+    deactivate Backend
+
+    deactivate Bluetooth
+
+else 연결 실패
+    Bluetooth --> Frontend : 연결 실패
+    deactivate Bluetooth
+    Frontend --> User : "센서 연결을 확인해주세요"\n+ 수동 입력 옵션 안내
+end
+
+deactivate Frontend
+
+note right of Bluetooth
+    <b>Web Bluetooth 제약</b>
+    • Chrome / Edge에서만 동작
+    • 사용자 권한 필요
+end note
+
+note right of Frontend
+    <b>실내 데이터 특성</b>
+    • 대부분 클라이언트에서 실시간 처리
+    • 서버에는 메타데이터만 선택적으로 동기화
+end note
+@enduml
+
+
+
+UC003
+
+@startuml
+title **UC-003 수면 모드 스파이크 측정 시퀀스 다이어그램** (최종)
+autonumber
+
+skinparam sequence {
+    ArrowColor #37474F
+    ActorBorderColor #1565C0
+    ActorBackgroundColor #E3F2FD
+    LifelineBorderColor #455A64
+    LifelineBackgroundColor #FAFAFA
+}
+
+actor "사용자" as User
+participant "브라우저\n(Frontend)" as Frontend
+participant "MediaDevices API" as MediaDev
+participant "Web Audio API\n(AnalyserNode)" as WebAudio
+participant "MediaRecorder" as Recorder
+database "IndexedDB" as IDB
+participant "Backend\n(FastAPI)" as Backend
+
+User -> Frontend : 수면 측정 시작 버튼 클릭
+activate Frontend
+
+' === 30일 데이터 정리 (시작 시 자동 실행) ===
+Frontend -> IDB : 30일 경과된 로컬 오디오 Blob 삭제
+activate IDB
+IDB --> Frontend : 로컬 정리 완료
+deactivate IDB
+
+Frontend -> Backend : POST /api/session/cleanup
+activate Backend
+Backend --> Frontend : 서버 정리 완료
+deactivate Backend
+
+' === 오디오 파이프라인 초기화 ===
+Frontend -> MediaDev : 마이크 권한 요청
+activate MediaDev
+MediaDev --> Frontend : 권한 허용
+deactivate MediaDev
+
+Frontend -> WebAudio : AudioContext + AnalyserNode 생성
+activate WebAudio
+
+loop 수면 중 실시간 모니터링
+    WebAudio --> Frontend : 실시간 데시벨 값 전달
+
+    alt 스파이크 감지 (+15dB 이상 & 2초 이상)
+        Frontend -> Recorder : MediaRecorder 시작 (Blob 버퍼링)
+        activate Recorder
+
+        WebAudio --> Frontend : 스파이크 종료 감지
+        Frontend -> Recorder : MediaRecorder 정지
+        Recorder --> Frontend : Blob 생성 완료 (ondataavailable)
+        deactivate Recorder
+
+        Frontend -> IDB : 스파이크 오디오 Blob 저장
+        activate IDB
+        IDB --> Frontend : 저장 완료
+        deactivate IDB
+
+        Frontend -> Backend : 스파이크 메타데이터 동기화
+        activate Backend
+        Backend --> Frontend : 동기화 완료
+        deactivate Backend
+    end
+end
+
+User -> Frontend : 수면 측정 종료 버튼 클릭
+Frontend -> WebAudio : AnalyserNode 해제
+deactivate WebAudio
+
+Frontend --> User : 수면 분석 결과 화면 표시
+deactivate Frontend
+
+note right of WebAudio
+    <b>스파이크 감지 조건</b>
+    • 배경 대비 +15dB 이상
+    • 2초 이상 지속
+end note
+
+note right of IDB
+    <b>데이터 저장 정책</b>
+    • 오디오 Blob은 IndexedDB에만 저장
+    • 30일 경과 시 자동 삭제
+end note
+
+note right of Backend
+    <b>서버 저장 범위</b>
+    • 메타데이터만 저장 (음성 파일 X)
+end note
+@enduml
+
+
+
+UC004
+
+@startuml
+title **UC-004 PDF 보고서 온디맨드 생성 시퀀스 다이어그램** (최종)
+autonumber
+
+skinparam sequence {
+    ArrowColor #37474F
+    ActorBorderColor #1565C0
+    ActorBackgroundColor #E3F2FD
+    LifelineBorderColor #455A64
+    LifelineBackgroundColor #FAFAFA
+}
+
+actor "사용자" as User
+participant "브라우저\n(Frontend)" as Frontend
+participant "Backend\n(FastAPI)" as Backend
+database "MariaDB" as DB
+
+User -> Frontend : 주간/월간 PDF 보고서 다운로드 클릭
+activate Frontend
+
+Frontend -> Backend : GET /api/report/download?period=WEEKLY\n(HTTPS + JWT Cookie)
+activate Backend
+
+' 데이터 조회
+Backend -> DB : 과거 측정 데이터 조회 (스파이크, 세션)
+activate DB
+DB --> Backend : 데이터셋 반환
+deactivate DB
+
+' PDF 생성 (메모리 내 처리)
+Backend -> Backend : reportlab으로 PDF 생성\n(io.BytesIO 메모리 버퍼 사용)
+note right of Backend
+    <b>Render Ephemeral FS 대응</b>
+    • 디스크에 파일을 쓰지 않음
+    • 메모리에서 바로 인코딩 후 스트리밍
+end note
+
+' 이력 기록
+Backend -> DB : ReportHistory 생성 로그 기록 (INSERT)
+activate DB
+DB --> Backend : 저장 완료
+deactivate DB
+
+' 응답
+Backend --> Frontend : HTTP 200 (application/pdf 바이너리 스트림)
+deactivate Backend
+
+' 브라우저 다운로드 처리
+Frontend --> Frontend : Blob 생성 + <a> 태그로 다운로드 트리거
+Frontend --> User : PDF 다운로드 완료
+
+deactivate Frontend
+
+note right of Backend
+    <b>설계 의도</b>
+    • PDF 파일 자체는 서버에 저장하지 않음
+    • ReportHistory에는 생성 이력과 요약 정보만 저장
+end note
+
+note right of DB
+    <b>ReportHistory 역할</b>
+    • PDF 원본 파일은 저장하지 않음
+    • 생성 시각, 기간, 요약 텍스트만 관리
+end note
+@enduml
+

@@ -1,0 +1,82 @@
+---
+### ✅ 최종 수정된 `startAudioMonitoring`
+```ts
+export const startAudioMonitoring = async () => {
+  // ✅ 하나라도 살아있으면 중복 실행 방지 (리소스 누수 방지)
+  if (stream || isRunning) {
+    console.log('✅ 마이크가 이미 실행 중이거나 정리 중입니다.');
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 44100,
+      },
+    });
+    audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 4096;
+    source.connect(analyser);
+    isRunning = true;
+    startMonitoringLoop();
+    console.log('✅ 마이크 스트림 및 모니터링 시작');
+  } catch (err) {
+    console.error('❌ 마이크 접근 실패', err);
+  }
+};
+```
+---
+### ✅ `saveBlobToIndexedDB` 함수 (IndexedDB + 30일 만료 정책)
+```ts
+// services/indexedDB.ts 또는 useAudio.ts 안에 넣어도 OK
+export const saveBlobToIndexedDB = async (blob: Blob) => {
+  try {
+    const db = await openDB(); // IndexedDB 열기 (아래에 openDB 예시 있음)
+    // Spike 메타데이터 + Blob 저장
+    const spikeId = crypto.randomUUID();
+    const metadata = {
+      id: spikeId,
+      detected_at: new Date().toISOString(),
+      duration_sec: Math.round((Date.now() - (spikeStartTime ?? 0)) / 1000),
+      size: blob.size,
+    };
+    // Blob 저장 (IndexedDB는 Blob 직접 저장 가능)
+    await db.put('spikes', {
+      id: spikeId,
+      blob: blob,
+      metadata: metadata,
+      expires_at: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30일 후 만료
+    });
+    // 서버 메타데이터 동기화 (로그인 상태일 때만)
+    if (useAuthStore.getState().isLoggedIn) {
+      await api.post(`/sessions/${currentSessionId}/spikes`, metadata);
+    }
+    console.log('✅ 스파이크 Blob 저장 완료');
+  } catch (err) {
+    console.error('❌ IndexedDB 저장 실패', err);
+  }
+};
+// IndexedDB 오픈 헬퍼 (한 번만 호출)
+let dbPromise: IDBDatabase | null = null;
+const openDB = async (): Promise<IDBDatabase> => {
+  if (dbPromise) return dbPromise;
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('EcoSenseDB', 1);
+    request.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains('spikes')) {
+        db.createObjectStore('spikes', { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = (e) => {
+      dbPromise = (e.target as IDBOpenDBRequest).result;
+      resolve(dbPromise);
+    };
+    request.onerror = (e) => reject(e);
+  });
+};
+```
+---

@@ -1,0 +1,80 @@
+---
+pid: 11064
+cwd: "F:\Programming\js\새 폴더"
+command: "Stop-Process -Id 25000 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; cd \"F:\\Programming\\js\\새 폴더\\backend\"; .\\.venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000"
+started_at: 2026-06-18T04:06:21.109Z
+running_for_ms: 27360006 
+---
+INFO:     Started server process [24172]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:62237 - "POST /api/auth/register HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:62237 - "POST /api/auth/login HTTP/1.1" 422 Unprocessable Entity
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 421, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 62, in __call__
+    return await self.app(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\applications.py", line 1162, in __call__
+    await super().__call__(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 1609, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 2047, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 1629, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 1218, in handle
+    await app(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 339, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\anyio\_backends\_asyncio.py", line 2592, in run_sync_in_worker_thread
+    return await future
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\anyio\_backends\_asyncio.py", line 1029, in run
+    result = context.run(func, *args)
+  File "F:\Programming\js\새 폴더\backend\app\routers\outdoor.py", line 16, in get_outdoor
+    return get_outdoor_data(db, location)
+  File "F:\Programming\js\새 폴더\backend\app\services\outdoor_service.py", line 75, in get_outdoor_data
+    if cache and cache.cached_at >= now - ttl:
+TypeError: can't compare offset-naive and offset-aware datetimes
+INFO:     127.0.0.1:62237 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62237 - "GET /api/outdoor?location=%EC%B0%BD%EC%9B%90 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:62238 - "POST /api/sync/upload HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62238 - "GET /api/sessions HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62238 - "GET /api/sync/download?days=30 HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62238 - "GET /api/report/history HTTP/1.1" 401 Unauthorized

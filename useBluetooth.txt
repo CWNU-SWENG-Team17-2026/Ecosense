@@ -1,0 +1,161 @@
+// src/hooks/useBluetooth.ts
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { useSensorStore } from '../stores/useSensorStore';
+
+/** LYWSD03MMC 센서 UUID */
+const SERVICE_UUID = 'ebe0ccb0-7a0a-4b0c-8a1a-6ff2997da3a6';
+const DATA_CHAR_UUID = 'ebe0ccc1-7a0a-4b0c-8a1a-6ff2997da3a6';
+
+export const useBluetooth = () => {
+  const deviceRef = useRef<BluetoothDevice | null>(null);
+  const gattServerRef = useRef<BluetoothRemoteGATTServer | null>(null);
+  const characteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null);
+
+  // 🔥 TDZ 방지: 모든 ref는 최상단에 선언
+  const dataHandlerRef = useRef<((event: Event) => void) | null>(null);
+  const disconnectHandlerRef = useRef<(() => void) | null>(null);
+
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+
+  const { setIndoorData, setConnected, setError } = useSensorStore();
+
+  /** BLE 데이터 파싱 (LYWSD03MMC 기본 펌웨어 전용) */
+  const parseSensorData = useCallback((value: DataView) => {
+    try {
+      const tempRaw = value.getInt16(0, true);
+      const temperature = Number((tempRaw / 100).toFixed(1));
+      const humidity = value.getUint8(2);
+      const battMv = value.getUint16(3, true);
+      let battery = value.byteLength > 5 ? value.getUint8(5) : 0;
+
+      if (battery === 0 || battery > 100) {
+        battery = Math.max(0, Math.min(100, Math.round((battMv - 2200) / 8)));
+      }
+
+      return { temperature, humidity, battery };
+    } catch (err) {
+      console.error('❌ BLE 데이터 파싱 실패:', err);
+      return null;
+    }
+  }, []);
+
+  const handleCharacteristicValueChanged = useCallback(
+    (event: Event) => {
+      const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+      if (!characteristic?.value) return;
+      const data = parseSensorData(new DataView(characteristic.value.buffer));
+      if (data) setIndoorData(data);
+    },
+    [parseSensorData, setIndoorData]
+  );
+
+  /** 완전한 정리 (메모리 누수 방지) */
+  const disconnect = useCallback(async () => {
+    try {
+      if (characteristicRef.current) {
+        await characteristicRef.current.stopNotifications().catch(() => {});
+      }
+      if (characteristicRef.current && dataHandlerRef.current) {
+        characteristicRef.current.removeEventListener(
+          'characteristicvaluechanged',
+          dataHandlerRef.current
+        );
+      }
+      if (deviceRef.current && disconnectHandlerRef.current) {
+        deviceRef.current.removeEventListener(
+          'gattserverdisconnected',
+          disconnectHandlerRef.current
+        );
+      }
+      if (deviceRef.current?.gatt?.connected) {
+        deviceRef.current.gatt.disconnect();
+      }
+    } catch (err) {
+      console.warn('⚠️ Disconnect 중 경미한 에러:', err);
+    } finally {
+      deviceRef.current = null;
+      gattServerRef.current = null;
+      characteristicRef.current = null;
+      dataHandlerRef.current = null;
+      disconnectHandlerRef.current = null;
+
+      setConnected(false);
+      setIsConnected(false);
+      setIndoorData({ temperature: 0, humidity: 0, battery: 0 });
+    }
+  }, [setConnected, setIsConnected, setIndoorData]);
+
+  const handleGattDisconnected = useCallback(() => {
+    console.warn('📴 GATT 서버 연결이 끊어졌습니다.');
+    disconnect();
+  }, [disconnect]);
+
+  /** Bluetooth 연결 */
+  const connect = useCallback(async () => {
+    if (isConnecting) return;
+    setIsConnecting(true);
+    setError(null);
+
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }],
+        optionalServices: [SERVICE_UUID],
+      });
+
+      deviceRef.current = device;
+      disconnectHandlerRef.current = handleGattDisconnected;
+      device.addEventListener('gattserverdisconnected', disconnectHandlerRef.current);
+
+      const server = await device.gatt!.connect();
+      gattServerRef.current = server;
+
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      const characteristic = await service.getCharacteristic(DATA_CHAR_UUID);
+      characteristicRef.current = characteristic;
+
+      dataHandlerRef.current = handleCharacteristicValueChanged;
+      await characteristic.startNotifications();
+      characteristic.addEventListener('characteristicvaluechanged', dataHandlerRef.current);
+
+      setConnected(true);
+      setIsConnected(true);
+      console.log('✅ LYWSD03MMC 연결 성공!');
+    } catch (err: any) {
+      let msg = 'Bluetooth 연결 실패';
+      if (err.name === 'NotFoundError') msg = '센서를 찾을 수 없습니다.';
+      else if (err.name === 'NotAllowedError') msg = 'Bluetooth 권한이 필요합니다.';
+      else if (err.name === 'NetworkError') msg = '연결이 불안정합니다.';
+      else if (err.name === 'InvalidStateError') msg = 'Bluetooth가 꺼져 있습니다.';
+
+      setError(msg);
+      console.error('❌ BLE 연결 실패:', err);
+
+      // 🔥 실패 시 강제 정리 (부분 연결 상태 완전 청소)
+      await disconnect();
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [
+    handleCharacteristicValueChanged,
+    handleGattDisconnected,
+    disconnect,
+    setError,
+    setConnected,
+    setIsConnected,   // ← 추가
+  ]);
+
+  useEffect(() => {
+    return () => {
+      disconnect();
+    };
+  }, [disconnect]);
+
+  return {
+    connect,
+    disconnect,
+    isConnecting,
+    isConnected,
+    isSupported: typeof navigator !== 'undefined' && 'bluetooth' in navigator,
+  };
+};

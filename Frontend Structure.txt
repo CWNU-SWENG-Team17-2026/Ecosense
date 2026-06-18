@@ -1,0 +1,108 @@
+EcoSense Frontend Structure (v1.1 — 코드 기준, 2026-06)
+
+src/
+├── components/
+│   ├── auth/
+│   │   └── AuthBootstrap.jsx       # 앱 시작 시 /auth/me로 세션 복원
+│   ├── charts/
+│   │   ├── NoiseChart.jsx          # 실시간 소음 그래프
+│   │   └── OutdoorChart.jsx        # 실외 환경 시계열 (history API)
+│   ├── common/
+│   │   └── InfoCard.jsx
+│   ├── indoor/
+│   │   └── SensorConnectButton.jsx
+│   ├── layout/
+│   │   ├── Layout.jsx              # Header + SideMenu + children
+│   │   ├── Header.jsx              # 페이지 제목 + 로그인/게스트 배지
+│   │   ├── SideMenu.jsx
+│   │   └── BottomTabBar.jsx        # (현재 미사용 가능)
+│   └── sleep/
+│       ├── SessionHistory.jsx      # FR-S-004/005 기록 탭
+│       └── SleepAnalysisResult.jsx # FR-S-003 수면 분석 결과
+│
+├── pages/
+│   ├── StartPage.jsx               # 시작 화면
+│   ├── LoginPage.jsx
+│   ├── RegisterPage.jsx
+│   ├── MainPage.jsx                # 메뉴 허브 (로그인 상태 표시)
+│   ├── OutdoorPage.jsx             # 실외 환경 (자동 로드, GPS, 지역 검색)
+│   ├── IndoorPage.jsx              # BLE LYWSD03MMC 센서
+│   ├── SleepPage.jsx               # 수면/소음 측정 (측정/기록 탭)
+│   ├── ReportsPage.jsx             # PDF 보고서 (로그인 필요)
+│   └── SettingsPage.jsx            # 계정, 동기화, 로그아웃
+│
+├── hooks/
+│   ├── useAudio.ts                 # 마이크 dB 측정 + 스파이크 감지/녹음
+│   ├── useBluetooth.ts             # Web Bluetooth 센서 연동
+│   └── useSync.ts                  # 서버 upload/download/sync
+│
+├── services/
+│   ├── api.ts                      # axios + 401 → /auth/refresh 인터셉터
+│   ├── auth.js
+│   ├── session.js
+│   ├── sync.js
+│   ├── outdoor.ts
+│   ├── location.js
+│   ├── report.js
+│   ├── bluetooth.ts
+│   └── indexedDB.ts                # spikes + sessions 로컬 저장
+│
+├── stores/                         # Zustand
+│   ├── useAuthStore.ts
+│   ├── useOutdoorStore.ts
+│   ├── useSensorStore.ts
+│   ├── useNoiseStore.ts            # persist: spikes, sessionId, mode
+│   └── useReportStore.ts
+│
+├── utils/
+│   ├── aqi.ts
+│   ├── comment.js                  # 온도/습도/소음 코멘트
+│   └── sleepAnalysis.js            # FR-S-003 휴리스틱 분석
+│
+├── types/
+│   ├── api.ts                      # API Request/Response 타입
+│   ├── domain.ts                   # Spike, OutdoorData, Session 등
+│   ├── store.ts
+│   └── bluetooth.d.ts
+│
+├── App.jsx                         # 라우팅 + AuthBootstrap
+├── main.jsx
+├── index.css
+└── vite-env.d.ts
+
+라우팅 (App.jsx)
+  /              → StartPage
+  /login         → LoginPage
+  /register      → RegisterPage
+  /main          → MainPage
+  /outdoor       → OutdoorPage (Layout)
+  /indoor        → IndoorPage (Layout)
+  /sleep         → SleepPage (Layout)
+  /reports       → ReportsPage (Layout)
+  /settings      → SettingsPage (Layout)
+
+환경 변수
+  frontend/.env.local
+    VITE_API_BASE_URL=http://127.0.0.1:8000/api
+  ※ localhost와 127.0.0.1은 쿠키 도메인이 달라서 반드시 통일할 것
+
+주요 데이터 흐름
+1. 게스트 수면 측정
+   useAudio → useNoiseStore + indexedDB(spikes, sessions)
+   SessionHistory → getSpikesBySession (로컬)
+
+2. 로그인 사용자
+   AuthBootstrap → /auth/me
+   useSync → upload/download (설정에서 syncAll)
+   SessionHistory → /api/sessions, /api/sessions/{id}/spikes
+
+3. 실외 데이터
+   OutdoorPage 마운트 시 자동 loadOutdoorData
+   GPS → "lat,lon" → loadOutdoorData 자동 호출
+
+v1.0 대비 변경
+- 페이지 확장: Start/Login/Register/Main 추가
+- SleepPage 탭 UI (측정 / 기록)
+- indexedDB sessions 스토어 (DB_VERSION 2)
+- useAudioDB.ts / audio.ts / db.ts / time.ts 제거·통합
+- 대부분 페이지는 .jsx (설계안의 .tsx와 다름)

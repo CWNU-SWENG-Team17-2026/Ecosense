@@ -1,0 +1,43 @@
+## LYWSD03MMC BLE UUID + 파싱 공식
+---
+### 서비스 / 캐릭터리스틱 UUID
+```
+Service UUID
+ebe0ccb0-7a0a-4b0c-8a1a-6ff2997da3a6
+Data Characteristic UUID ← 온습도 + 배터리 읽는 곳
+ebe0ccc1-7a0a-4b0c-8a1a-6ff2997da3a6
+```
+---
+### 데이터 패킷 구조 (6바이트)
+```
+Byte Index [0][1] [2] [3][4] [5]
+            온도 습도 배터리mV (예비)
+예시 바이트: 0A 0A 32 B0 0A 00
+```
+---
+### 파싱 공식
+```js
+// 내 코드에서 이렇게 파싱하고 있어요
+const temp = dv.getInt16(0, true) / 100 // little-endian 부호있는 2바이트
+const humidity = dv.getUint8(2) // 1바이트 정수
+const battMv = dv.getUint16(3, true) // 배터리 전압 (mV)
+// 배터리 전압 → % 변환 (2200mV=0%, 3000mV=100% 근사값)
+const battery = Math.round((battMv - 2200) / 8)
+```
+---
+### 실제 계산 예시
+```
+바이트: [0A 0A] → getInt16 = 0x0A0A = 2570 → /100 = 25.70°C
+바이트: [32] → getUint8 = 50 → 50%
+바이트: [B0 0A] → getUint16 = 0x0AB0 = 2736mV → (2736-2200)/8 = 67%
+```
+---
+### ⚠️ 주의사항
+**음수 온도도 지원** (`getInt16` 사용 이유)
+```js
+// getUint16 쓰면 영하 온도가 이상한 값으로 나옴
+// getInt16 써야 -5.00°C 같은 값 정상 파싱
+```
+**기본 펌웨어 전용** — ATC 커스텀 펌웨어는 패킷 구조가 다름
+---
+

@@ -1,0 +1,9 @@
+---
+pid: 11360
+cwd: "F:\Programming\js\새 폴더"
+command: "Stop-Process -Id 11064 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; cd \"F:\\Programming\\js\\새 폴더\\backend\"; .\\.venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+started_at: 2026-06-18T04:06:46.345Z
+running_for_ms: 27335005 
+---
+INFO:     Will watch for changes in these directories: ['F:\\Programming\\js\\새 폴더\\backend']
+ERROR:    [WinError 10013] 액세스 권한에 의해 숨겨진 소켓에 액세스를 시도했습니다

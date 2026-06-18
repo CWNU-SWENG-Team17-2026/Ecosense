@@ -1,0 +1,136 @@
+// src/pages/SleepPage.tsx
+import { useAudio } from '../hooks/useAudio';
+import { useNoiseStore } from '../stores/useNoiseStore';
+import { useSync } from '../hooks/useSync';
+
+export const SleepPage = () => {
+  const { 
+    currentDb, 
+    backgroundDb, 
+    isMeasuring, 
+    isSpiking, 
+    startAudioMonitoring, 
+    stopAudioMonitoring 
+  } = useAudio();
+
+  const { spikes, sessionId } = useNoiseStore();
+  const { uploadToServer } = useSync();   // 나중에 수동 업로드 버튼으로 활용 가능
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto min-h-screen bg-zinc-950 text-white">
+      <h1 className="text-3xl font-bold mb-8 flex items-center gap-3">
+        🛌 수면 / 소음 측정
+      </h1>
+
+      {/* 메인 카드 */}
+      <div className={`rounded-3xl p-8 transition-all duration-300 ${
+        isMeasuring 
+          ? 'bg-emerald-950/60 border border-emerald-500/40 shadow-xl shadow-emerald-500/10' 
+          : 'bg-zinc-900'
+      }`}>
+        <div className="flex justify-between items-start">
+          <div>
+            <p className="text-sm text-zinc-400 mb-1">현재 소음</p>
+            <p className="text-7xl font-mono font-bold text-emerald-400 tracking-tighter">
+              {currentDb === -Infinity ? '--' : currentDb.toFixed(1)}
+              <span className="text-3xl font-normal text-emerald-300/70 ml-1">dB</span>
+            </p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-sm text-zinc-400 mb-1">배경 소음</p>
+            <p className="text-4xl font-mono text-zinc-400">
+              {backgroundDb.toFixed(1)} <span className="text-xl">dB</span>
+            </p>
+          </div>
+        </div>
+
+        {/* 버튼 */}
+        <div className="mt-10">
+          {!isMeasuring ? (
+            <button
+              onClick={startAudioMonitoring}
+              className="w-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 
+                         text-white py-5 rounded-2xl font-medium text-xl transition-all
+                         flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/30"
+            >
+              📍 측정 시작하기
+            </button>
+          ) : (
+            <button
+              onClick={stopAudioMonitoring}
+              className="w-full bg-red-500 hover:bg-red-600 active:bg-red-700 
+                         text-white py-5 rounded-2xl font-medium text-xl transition-all
+                         flex items-center justify-center gap-3"
+            >
+              ⏹️ 측정 종료하기
+            </button>
+          )}
+        </div>
+
+        {/* 스파이크 인디케이터 */}
+        {isSpiking && (
+          <div className="mt-6 flex items-center justify-center gap-2 text-amber-400 font-medium">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-400"></span>
+            </span>
+            ⚠️ 스파이크 감지 중...
+          </div>
+        )}
+
+        {/* 측정 중 배지 */}
+        {isMeasuring && !isSpiking && (
+          <div className="mt-6 text-center text-emerald-400 text-sm font-medium flex items-center justify-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+            </span>
+            측정 중
+          </div>
+        )}
+      </div>
+
+      {/* 하단 정보 */}
+      <div className="mt-8 grid grid-cols-2 gap-4 text-sm">
+        <div className="bg-zinc-900 rounded-2xl p-4">
+          <div className="text-zinc-400 text-xs">세션 ID</div>
+          <div className="font-mono text-emerald-300 text-lg mt-1 break-all">{sessionId || '없음'}</div>
+        </div>
+        <div className="bg-zinc-900 rounded-2xl p-4">
+          <div className="text-zinc-400 text-xs">저장된 스파이크</div>
+          <div className="font-medium text-white text-4xl mt-1">{spikes.length}</div>
+        </div>
+      </div>
+
+      {/* DEV debug */}
+      {import.meta.env.DEV && (
+        <div className="mt-8 text-[10px] text-zinc-500 font-mono bg-zinc-900 p-3 rounded-xl">
+          isMeasuring: {String(isMeasuring)} | isSpiking: {String(isSpiking)}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+
+
+// src/App.tsx
+import { SleepPage } from './pages/SleepPage';
+// import { OutdoorPage } from './pages/OutdoorPage';
+// import { IndoorPage } from './pages/IndoorPage';
+
+function App() {
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white">
+      <div className="max-w-4xl mx-auto">
+        {/* Bottom TabBar는 나중에 추가 */}
+        <SleepPage />
+      </div>
+    </div>
+  );
+}
+
+export default App;

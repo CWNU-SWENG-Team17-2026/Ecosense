@@ -1,0 +1,68 @@
+---
+pid: 5188
+cwd: "F:\Programming\js\새 폴더"
+command: "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 2; cd \"F:\\Programming\\js\\새 폴더\\backend\"; .\\.venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+started_at: 2026-06-18T04:07:01.746Z
+running_for_ms: 27320005 
+---
+INFO:     Will watch for changes in these directories: ['F:\\Programming\\js\\새 폴더\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [24204] using WatchFiles
+INFO:     Started server process [12984]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:60414 - "POST /api/auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "POST /api/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /api/outdoor?location=changwon HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "POST /api/sync/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /api/sessions/sess-001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /api/sessions/sess-001/spikes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /api/sync/download?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /api/report/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /api/report/download?period=weekly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "POST /api/auth/logout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60420 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60420 - "GET /api/report/download?period=weekly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61273 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62543 - "GET /health HTTP/1.1" 200 OK
+ WARNING:  WatchFiles detected changes in 'scripts\e2e_api_test.py'. Reloading...
+INFO:     127.0.0.1:64154 - "POST /api/auth/register HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "GET /api/outdoor?location=%EA%B2%BD%EB%82%A8+%EC%B0%BD%EC%9B%90%EC%8B%9C HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "POST /api/sync/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "GET /api/sync/download?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "GET /api/report/download?period=weekly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "GET /api/report/history?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "POST /api/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "POST /api/auth/logout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64154 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64170 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64170 - "POST /api/sync/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64170 - "GET /api/sync/download?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64170 - "GET /api/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "POST /api/auth/register HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:64177 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "GET /api/outdoor?location=%EA%B2%BD%EB%82%A8+%EC%B0%BD%EC%9B%90%EC%8B%9C HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "POST /api/sync/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "GET /api/sync/download?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "GET /api/report/download?period=weekly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "GET /api/report/history?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "POST /api/auth/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "POST /api/auth/logout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64177 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64186 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50207 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:50207 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:50207 - "POST /api/auth/refresh HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:50207 - "POST /api/auth/refresh HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:52972 - "GET /api/outdoor?location=%EA%B2%BD%EB%82%A8+%EC%B0%BD%EC%9B%90%EC%8B%9C+%EC%9D%98%EC%B0%BD%EA%B5%AC HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51727 - "GET /api/outdoor?location=%EA%B2%BD%EB%82%A8+%EC%B0%BD%EC%9B%90%EC%8B%9C+%EC%9D%98%EC%B0%BD%EA%B5%AC HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59860 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59860 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59860 - "POST /api/auth/refresh HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59860 - "POST /api/auth/refresh HTTP/1.1" 401 Unauthorized

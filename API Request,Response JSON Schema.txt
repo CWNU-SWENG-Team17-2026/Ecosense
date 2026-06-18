@@ -1,0 +1,191 @@
+
+✅ API Request/Response JSON Schema (v1.1 — 코드 기준, 2026-06)
+
+※ 실제 FastAPI 응답은 아래 스키마를 직접 반환합니다.
+  공통 ApiResponse 래퍼(success/data/timestamp)는 사용하지 않습니다.
+
+────────────────────────────────────────
+1. Auth
+────────────────────────────────────────
+
+POST /api/auth/register
+POST /api/auth/login
+→ UserResponse
+{
+  id: string;
+  email: string;
+  created_at: string;   // ISO 8601
+}
+
+POST /api/auth/refresh
+→ { message: string }
+
+POST /api/auth/logout
+→ { message: string }
+
+────────────────────────────────────────
+2. Sync
+────────────────────────────────────────
+
+POST /api/sync/upload
+interface SyncUploadRequest {
+  sessions: {
+    id: string;                    // client-generated UUID
+    type: 'OUTDOOR' | 'INDOOR' | 'SLEEP';
+    started_at: string;            // ISO 8601
+    ended_at?: string;
+  }[];
+  spikes: {
+    session_id: string;
+    detected_at: string;
+    db_level: number;
+    duration_sec: number;
+  }[];
+}
+
+interface SyncUploadResponse {
+  synced_sessions: number;
+  synced_spikes: number;
+  failed_session_ids?: string[];
+}
+
+GET /api/sync/download?days=30
+interface SyncDownloadResponse {
+  sessions: SyncUploadRequest['sessions'];
+  spikes: (SyncUploadRequest['spikes'][0] & { id: string })[];
+}
+
+────────────────────────────────────────
+3. Sessions / Spikes
+────────────────────────────────────────
+
+GET /api/sessions?offset=0&limit=20
+interface SessionListResponse {
+  sessions: {
+    id: string;
+    type: 'OUTDOOR' | 'INDOOR' | 'SLEEP';
+    started_at: string;
+    ended_at?: string;
+    spike_count: number;
+  }[];
+  total: number;
+  has_more: boolean;
+}
+
+GET /api/sessions/{id}
+interface SessionDetailResponse {
+  id: string;
+  type: 'OUTDOOR' | 'INDOOR' | 'SLEEP';
+  started_at: string;
+  ended_at?: string;
+  spike_summary: {
+    count: number;
+    avg_db_level?: number;
+    max_db_level?: number;
+  };
+}
+
+GET /api/sessions/{id}/spikes
+interface SessionSpikesResponse {
+  spikes: {
+    id: string;
+    detected_at: string;
+    db_level: number;
+    duration_sec: number;
+  }[];
+}
+
+POST /api/sessions/{session_id}/spikes
+interface CreateSpikeRequest {
+  detected_at: string;
+  db_level: number;
+  duration_sec: number;
+}
+interface CreateSpikeResponse {
+  spike_id: string;
+}
+
+DELETE /api/sessions/{id}
+→ { deleted_spikes_count: number }
+
+DELETE /api/sessions
+→ { deleted_sessions: number; deleted_spikes: number }
+
+DELETE /api/sessions/{id}/spikes
+→ { deleted_count: number }
+
+DELETE /api/spikes/{spike_id}
+→ { deleted_count: number }
+
+POST /api/sessions/cleanup
+→ { deleted_spikes: number; deleted_sessions: number }
+
+────────────────────────────────────────
+4. Outdoor
+────────────────────────────────────────
+
+GET /api/outdoor?location=경남 창원시 의창구
+GET /api/outdoor?location=35.2280,128.6820   // GPS 좌표도 가능
+interface OutdoorResponse {
+  location: string;
+  temperature: number;
+  humidity: number;
+  rainfall?: number;
+  aqi: number;
+  aqi_grade: 'good' | 'moderate' | 'bad' | 'very_bad';
+  pm25: number;
+  pm10?: number;
+  uv_index?: number;
+  weather_description: string;
+  cached: boolean;          // TTL 내 캐시 히트 여부
+  is_mock: boolean;           // API 키 없음/실패 시 mock 데이터
+  last_updated: string;       // ISO 8601
+}
+
+GET /api/outdoor/history?location=&hours=12
+interface OutdoorHistoryResponse {
+  records: OutdoorResponse[];
+}
+
+────────────────────────────────────────
+5. Location
+────────────────────────────────────────
+
+GET /api/location/search?keyword=창원
+→ { name: string }[]
+
+────────────────────────────────────────
+6. Report
+────────────────────────────────────────
+
+GET /api/report/history?limit=10
+→ ReportHistoryItem[]    // 배열 직접 반환 (래퍼 없음)
+interface ReportHistoryItem {
+  id: string;
+  period: 'weekly' | 'monthly';
+  created_at: string;
+  summary_text?: string;
+}
+
+GET /api/report/download?period=weekly|monthly
+→ application/pdf (바이너리 스트림)
+
+────────────────────────────────────────
+7. Health
+────────────────────────────────────────
+
+GET /health
+→ { status: "ok" }
+
+────────────────────────────────────────
+타입 정의 위치
+────────────────────────────────────────
+- 백엔드: backend/app/schemas/
+- 프론트: frontend/src/types/api.ts, frontend/src/types/domain.ts
+
+v1.1 변경 요약 (v1.0 대비)
+- GET /api/sessions: days → offset/limit 페이지네이션
+- OutdoorResponse에 is_mock 추가
+- OutdoorHistoryResponse, /api/location/search 추가
+- register 응답: message → UserResponse
+- 공통 ApiResponse 래퍼는 설계안에만 존재 (미구현)

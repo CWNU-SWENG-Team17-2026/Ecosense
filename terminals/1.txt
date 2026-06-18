@@ -1,0 +1,112 @@
+---
+pid: 8340
+cwd: "F:\Programming\js\새 폴더"
+command: "cd \"F:\\Programming\\js\\새 폴더\\backend\"; .\\.venv\\Scripts\\uvicorn app.main:app --host 127.0.0.1 --port 8000"
+started_at: 2026-06-18T04:05:42.555Z
+running_for_ms: 27399997 
+---
+INFO:     Started server process [25000]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:51754 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51755 - "POST /api/auth/register HTTP/1.1" 500 Internal Server Error
+(trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+AttributeError: module 'bcrypt' has no attribute '__about__'
+INFO:     127.0.0.1:51754 - "GET /api/outdoor?location=%EC%B0%BD%EC%9B%90 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51756 - "POST /api/auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51756 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 421, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 62, in __call__
+    return await self.app(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\applications.py", line 1162, in __call__
+    await super().__call__(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 1609, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 2047, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 1629, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 1218, in handle
+    await app(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 143, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 129, in app
+    response = await f(request)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 683, in app
+    raw_response = await run_endpoint_function(
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\fastapi\routing.py", line 339, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\anyio\_backends\_asyncio.py", line 2592, in run_sync_in_worker_thread
+    return await future
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\anyio\_backends\_asyncio.py", line 1029, in run
+    result = context.run(func, *args)
+  File "F:\Programming\js\새 폴더\backend\app\routers\auth.py", line 55, in register
+    user = create_user(db, payload)
+  File "F:\Programming\js\새 폴더\backend\app\services\auth_service.py", line 13, in create_user
+    user = User(email=payload.email, password_hash=hash_password(payload.password))
+  File "F:\Programming\js\새 폴더\backend\app\utils\security.py", line 7, in hash_password
+    return pwd_context.hash(password)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\context.py", line 2258, in hash
+    return record.hash(secret, **kwds)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\utils\handlers.py", line 779, in hash
+    self.checksum = self._calc_checksum(secret)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\handlers\bcrypt.py", line 591, in _calc_checksum
+    self._stub_requires_backend()
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\utils\handlers.py", line 2254, in _stub_requires_backend
+    cls.set_backend()
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\utils\handlers.py", line 2156, in set_backend
+    return owner.set_backend(name, dryrun=dryrun)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\utils\handlers.py", line 2163, in set_backend
+    return cls.set_backend(name, dryrun=dryrun)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\utils\handlers.py", line 2188, in set_backend
+    cls._set_backend(name, dryrun)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\utils\handlers.py", line 2311, in _set_backend
+    super(SubclassBackendMixin, cls)._set_backend(name, dryrun)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\utils\handlers.py", line 2224, in _set_backend
+    ok = loader(**kwds)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\handlers\bcrypt.py", line 626, in _load_backend_mixin
+    return mixin_cls._finalize_backend_mixin(name, dryrun)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\handlers\bcrypt.py", line 421, in _finalize_backend_mixin
+    if detect_wrap_bug(IDENT_2A):
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\handlers\bcrypt.py", line 380, in detect_wrap_bug
+    if verify(secret, bug_hash):
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\utils\handlers.py", line 792, in verify
+    return consteq(self._calc_checksum(secret), chk)
+  File "F:\Programming\js\새 폴더\backend\.venv\lib\site-packages\passlib\handlers\bcrypt.py", line 655, in _calc_checksum
+    hash = _bcrypt.hashpw(secret, config)
+ValueError: password cannot be longer than 72 bytes, truncate manually if necessary (e.g. my_password[:72])

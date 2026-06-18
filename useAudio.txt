@@ -1,0 +1,225 @@
+// src/hooks/useAudio.ts
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useNoiseStore } from '../stores/useNoiseStore';
+import { saveSpikeWithBlob, cleanupExpiredSpikes } from '../services/indexedDB';
+import { useSync } from './useSync';
+
+export const useAudio = () => {
+  // Local state (실시간 audio loop 성능 + UI 즉시 반응용)
+  const [currentDb, setCurrentDb] = useState(-Infinity);
+  const [backgroundDb, setBackgroundDb] = useState(-45);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+  const [isSpiking, setIsSpiking] = useState(false);
+
+  // Store actions
+  const {
+    setCurrentDb: storeSetCurrentDb,
+    setBackgroundDb: storeSetBackgroundDb,
+    addSpike,
+    sessionId,
+    setIsSpiking: storeSetIsSpiking,
+    setIsMeasuring: storeSetIsMeasuring,
+    startNewSession,
+    endCurrentSession,
+  } = useNoiseStore();
+
+  // Audio refs
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+
+  // Spike + Recorder refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const spikeStartTimeRef = useRef<number | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const latestDbRef = useRef<number>(-Infinity);
+
+  const { uploadToServer } = useSync();
+
+  // Stable handlers
+  const recorderOnDataRef = useRef<((e: BlobEvent) => void) | null>(null);
+  const recorderOnStopRef = useRef<(() => Promise<void>) | null>(null);
+
+  /** RMS → dBFS (DSP 핵심 공식)
+   * \[ L_{dB} = 20 \log_{10} \left( \sqrt{\frac{1}{N} \sum_{i=1}^{N} \left( \frac{x_i - 128}{128} \right)^2 } \right) \]
+   */
+  const calculateDb = useCallback((analyser: AnalyserNode): number => {
+    if (!dataArrayRef.current) return -Infinity;
+    analyser.getByteTimeDomainData(dataArrayRef.current);
+    let sum = 0;
+    for (let i = 0; i < dataArrayRef.current.length; i++) {
+      const sample = (dataArrayRef.current[i] - 128) / 128;
+      sum += sample * sample;
+    }
+    const rms = Math.sqrt(sum / dataArrayRef.current.length);
+    return rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+  }, []);
+
+  const updateBackgroundDb = useCallback((current: number) => {
+    if (current < backgroundDb + 10) {
+      const newBg = backgroundDb * 0.95 + current * 0.05;
+      setBackgroundDb(newBg);
+      storeSetBackgroundDb(newBg);
+    }
+  }, [backgroundDb, storeSetBackgroundDb]);
+
+  const cleanupRecorder = useCallback(() => {
+    mediaRecorderRef.current = null;
+    spikeStartTimeRef.current = null;
+    chunksRef.current = [];
+  }, []);
+
+  /** 스파이크 녹음 시작 */
+  const startSpikeRecording = useCallback(() => {
+    if (!streamRef.current || mediaRecorderRef.current) return;
+
+    const recorder = new MediaRecorder(streamRef.current, {
+      mimeType: 'audio/webm;codecs=opus',
+    });
+    mediaRecorderRef.current = recorder;
+    chunksRef.current = [];
+    spikeStartTimeRef.current = Date.now();
+    latestDbRef.current = currentDb;
+
+    recorderOnDataRef.current = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+
+    recorderOnStopRef.current = async () => {
+      const durationSec = (Date.now() - (spikeStartTimeRef.current ?? 0)) / 1000;
+      if (durationSec < 2 || chunksRef.current.length === 0) {
+        cleanupRecorder();
+        return;
+      }
+
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+
+      const spike = {
+        id: crypto.randomUUID(),
+        session_id: sessionId ?? crypto.randomUUID(),
+        detected_at: new Date().toISOString(),
+        db_level: Math.round(latestDbRef.current),
+        duration_sec: Math.round(durationSec),
+      };
+
+      await saveSpikeWithBlob(spike, blob);
+      addSpike(spike);
+
+      console.log(`✅ 스파이크 저장 완료! ${durationSec.toFixed(1)}초, ${latestDbRef.current.toFixed(1)}dB`);
+      cleanupRecorder();
+    };
+
+    recorder.ondataavailable = recorderOnDataRef.current;
+    recorder.onstop = recorderOnStopRef.current;
+    recorder.start(1000);
+  }, [sessionId, currentDb, addSpike, cleanupRecorder]);
+
+  const checkForSpike = useCallback((current: number) => {
+    const threshold = backgroundDb + 15;
+    if (current > threshold) {
+      if (!isSpiking) {
+        setIsSpiking(true);
+        storeSetIsSpiking(true);
+        startSpikeRecording();
+      }
+    } else if (isSpiking && spikeStartTimeRef.current) {
+      const durationSec = (Date.now() - spikeStartTimeRef.current) / 1000;
+      if (durationSec >= 2 && mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+      } else {
+        mediaRecorderRef.current?.stop();
+        cleanupRecorder();
+      }
+      setIsSpiking(false);
+      storeSetIsSpiking(false);
+    }
+  }, [backgroundDb, isSpiking, startSpikeRecording, cleanupRecorder, storeSetIsSpiking]);
+
+  const monitoringLoop = useCallback(() => {
+    if (!analyserRef.current || !isMeasuring) return;
+
+    const db = calculateDb(analyserRef.current);
+    setCurrentDb(db);
+    storeSetCurrentDb(db);
+    latestDbRef.current = db;
+
+    updateBackgroundDb(db);
+    checkForSpike(db);
+
+    animationFrameRef.current = requestAnimationFrame(monitoringLoop);
+  }, [calculateDb, updateBackgroundDb, checkForSpike, isMeasuring, storeSetCurrentDb]);
+
+  const startAudioMonitoring = useCallback(async () => {
+    if (streamRef.current || isMeasuring) return;
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 },
+      });
+
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 4096;
+      analyserRef.current.smoothingTimeConstant = 0.8;
+      source.connect(analyserRef.current);
+      dataArrayRef.current = new Uint8Array(analyserRef.current.fftSize);
+
+      // ✅ 성공한 뒤에만 세션 생성 (에러 핸들링 최고!)
+      const newSessionId = startNewSession('SLEEP');
+      setIsMeasuring(true);
+      storeSetIsMeasuring(true);
+
+      monitoringLoop();
+      console.log(`✅ Audio 모니터링 + 스파이크 감지 완전 시작 (Session: ${newSessionId})`);
+    } catch (err) {
+      console.error('❌ 마이크 접근 실패:', err);
+    }
+  }, [monitoringLoop, startNewSession, storeSetIsMeasuring]);
+
+  const stopAudioMonitoring = useCallback(() => {
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+    }
+
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    audioContextRef.current?.close?.();
+
+    streamRef.current = null;
+    audioContextRef.current = null;
+    analyserRef.current = null;
+    dataArrayRef.current = null;
+
+    // ✅ 상태 + 세션 완전 정리
+    setIsMeasuring(false);
+    setIsSpiking(false);
+    setCurrentDb(-Infinity);
+
+    storeSetIsMeasuring(false);
+    storeSetIsSpiking(false);
+    endCurrentSession();
+    uploadToServer();        // ← 세션 종료 시 자동 업로드 (완벽!)
+
+    console.log('✅ Audio 모니터링 완전 종료');
+  }, [storeSetIsMeasuring, storeSetIsSpiking, endCurrentSession, uploadToServer]);
+
+  useEffect(() => {
+    cleanupExpiredSpikes();
+  }, []);
+
+  useEffect(() => {
+    return () => stopAudioMonitoring();
+  }, [stopAudioMonitoring]);
+
+  return {
+    currentDb,
+    backgroundDb,
+    isMeasuring,
+    isSpiking,
+    startAudioMonitoring,
+    stopAudioMonitoring,
+  };
+};

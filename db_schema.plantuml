@@ -1,0 +1,74 @@
+@startuml
+title **EcoSense Database Schema**
+
+skinparam class {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  ArrowColor #1565C0
+}
+
+entity "User" as user {
+  * id : INT <<PK>>
+  --
+  * email : VARCHAR(255) <<UNIQUE>>
+  * password_hash : VARCHAR(255)
+  * created_at : DATETIME
+}
+
+entity "IndoorData" as indoor_data {
+  * id : INT <<PK>>
+  --
+  * user_id : INT <<FK>>
+  * temperature : FLOAT
+  * humidity : FLOAT
+  * aqi : FLOAT
+  * timestamp : DATETIME
+}
+
+entity "OutdoorDataCache" as outdoor_cache {
+  * id : INT <<PK>>
+  --
+  * location : VARCHAR(255)
+  * temperature : FLOAT
+  * humidity : FLOAT
+  * aqi : FLOAT
+  * uv_index : FLOAT
+  * timestamp : DATETIME
+}
+
+entity "NoiseData" as noise_data {
+  * id : INT <<PK>>
+  --
+  * user_id : INT <<FK>>
+  * decibel_level : FLOAT
+  * timestamp : DATETIME
+}
+
+entity "SleepSession" as sleep_session {
+  * id : INT <<PK>>
+  --
+  * user_id : INT <<FK>>
+  * start_time : DATETIME
+  * end_time : DATETIME
+  * sleep_quality : VARCHAR(50)
+  * spike_count : INT
+  * created_at : DATETIME
+}
+
+entity "NoiseSpike" as noise_spike {
+  * id : INT <<PK>>
+  --
+  * sleep_session_id : INT <<FK>>
+  * decibel_level : FLOAT
+  * timestamp : DATETIME
+}
+
+' Relationships
+user ||--o{ indoor_data : "records"
+user ||--o{ noise_data : "records"
+user ||--o{ sleep_session : "has"
+sleep_session ||--o{ noise_spike : "contains"
+
+note right of outdoor_cache : Used for caching\nWeather API responses
+
+@enduml

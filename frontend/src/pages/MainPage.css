@@ -1,0 +1,85 @@
+.main-card {
+  max-width: 620px;
+  padding: 36px;
+}
+
+.main-auth-status {
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.main-auth-status__logged-in,
+.main-auth-status__guest {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #a1a1aa;
+  margin: 0;
+}
+
+.main-auth-status__logged-in {
+  color: #34d399;
+}
+
+.main-auth-status__guest button {
+  background: none;
+  border: none;
+  color: #34d399;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.main-auth-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #71717a;
+  flex-shrink: 0;
+}
+
+.main-auth-dot--on {
+  background: #34d399;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+}
+
+.main-logo {
+  width: 340px;
+  margin: 0 auto 32px;
+}
+
+.main-menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.85fr;
+  gap: 20px;
+}
+
+.menu-image-button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: none;
+}
+
+.menu-image-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.menu-image-button:not(.menu-settings) {
+  height: 180px;
+}
+
+.menu-settings {
+  grid-row: span 2;
+}
+
+.menu-settings img {
+  height: 380px;
+  object-fit: contain;
+}

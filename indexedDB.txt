@@ -1,0 +1,74 @@
+EcoSense IndexedDB 설계 (v1.1 — frontend/src/services/indexedDB.ts 기준)
+
+DB_NAME  = 'EcoSenseDB'
+DB_VERSION = 2
+
+────────────────────────────────────────
+Object Stores
+────────────────────────────────────────
+
+1) spikes (keyPath: id)
+   인덱스:
+   - expires_at   … 30일 만료 정리용
+   - session_id   … 세션별 스파이크 조회
+
+   레코드 필드:
+   - id, session_id, detected_at, db_level, duration_sec
+   - blob           … 스파이크 녹음 (MediaRecorder)
+   - expires_at     … Unix ms (생성 + 30일)
+
+2) sessions (keyPath: id)          ← v1.1 추가
+   인덱스:
+   - started_at     … 최신순 정렬
+   - type           … OUTDOOR | INDOOR | SLEEP
+
+   레코드 필드:
+   - id, type, started_at, ended_at?
+   - spike_count?   … sync download 시 집계값 저장
+
+────────────────────────────────────────
+Export 함수
+────────────────────────────────────────
+
+[Spikes]
+saveSpikeWithBlob(spike, blob)     … 측정 중 스파이크+녹음 저장
+saveSpikeMetadata(spike)           … 서버 sync 다운로드 시 메타만 저장
+getSpikes()                        … 전체 스파이크
+getSpikesBySession(sessionId)      … 세션별 (SessionHistory 게스트 모드)
+getRecordings()                    … blob 있는 항목만 (재생 UI)
+clearSpikes()                      … spikes 스토어 전체 삭제
+cleanupExpiredSpikes()             … expires_at 지난 항목 삭제 (앱 시작 시)
+
+[Sessions]
+saveSession(session)               … 측정 시작/종료, sync download 시
+getSessions()                      … started_at 내림차순
+deleteSessionFromDB(sessionId)     … 세션 + 연관 스파이크 cascade 삭제
+clearAllSessions()                 … sessions + spikes 모두 초기화
+
+────────────────────────────────────────
+호출 위치
+────────────────────────────────────────
+
+useAudio.ts
+  - 측정 시작(sleep): saveSession({ started_at })
+  - 측정 종료(sleep): saveSession({ ended_at })
+  - 스파이크 감지: saveSpikeWithBlob
+
+useSync.ts
+  - downloadFromServer: saveSession + saveSpikeMetadata
+  - uploadToServer / uploadAllLocalData: getSpikesBySession, getSpikes
+
+SessionHistory.jsx (게스트)
+  - getSessions, getSpikesBySession, deleteSessionFromDB
+
+SleepPage.jsx
+  - getSpikes, getRecordings, clearSpikes
+
+────────────────────────────────────────
+구현 메모
+────────────────────────────────────────
+
+- IDBRequest는 Promise 래퍼(idbRequest)로 async/await 처리
+- deleteSessionFromDB / clearAllSessions는 tx.oncomplete까지 대기
+- 게스트 기록 탭은 sessions + spikes 양쪽 모두 필요 (세션만 저장하면 기록 비어 보임)
+- v1.0 대비: DB_VERSION 1→2, sessions 스토어 추가, getSpikeWithBlob/deleteSpike/getAllSpikes는 미구현(삭제됨)
