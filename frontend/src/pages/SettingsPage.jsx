@@ -68,6 +68,12 @@ export default function SettingsPage() {
               {isSyncing ? '동기화 중...' : '데이터 동기화'}
             </button>
 
+            <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+              로그아웃은 계정 연결만 해제합니다. 이 기기의 수면 측정·녹음 데이터는
+              IndexedDB(로컬)에 그대로 남습니다. 서버에 동기화된 기록은 계정에
+              보관되며, 다른 기기에서 로그인하면 확인할 수 있습니다.
+            </p>
+
             <button
               type="button"
               className="logout-button w-full bg-red-500/90 hover:bg-red-500 text-white py-4 rounded-2xl"

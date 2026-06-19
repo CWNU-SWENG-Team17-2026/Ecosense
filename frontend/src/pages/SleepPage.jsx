@@ -333,6 +333,11 @@ export default function SleepPage() {
       >
         이상 소음 기록 초기화
       </button>
+      <p className="text-xs text-zinc-500 mt-2 leading-relaxed">
+        이 기기의 IndexedDB 스파이크·녹음만 삭제합니다. 서버(PostgreSQL)에
+        동기화된 기록은 삭제되지 않으며, 기록 탭(로그인 시)에서 여전히 볼 수
+        있습니다. 세션 목록(기록 탭)은 별도로 남을 수 있습니다.
+      </p>
 
       </>}
     </section>
