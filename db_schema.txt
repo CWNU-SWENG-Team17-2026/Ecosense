@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 EcoSense Database Schema (v1.2 — 2026-06, PostgreSQL / Render 기준)
 
 정본 소스:
@@ -116,6 +117,10 @@ PlantUML ER Diagram
 
 @startuml
 title **EcoSense Database Schema (PostgreSQL v1.2)**
+=======
+@startuml
+title **EcoSense Database Schema**
+>>>>>>> 20f5fbe27cc37742b222d799b161ab7508b3a827
 
 skinparam class {
   BackgroundColor #E3F2FD
@@ -123,6 +128,7 @@ skinparam class {
   ArrowColor #1565C0
 }
 
+<<<<<<< HEAD
 entity "users" as users {
   * id : SERIAL <<PK>>
   --
@@ -160,10 +166,33 @@ entity "spikes" as spikes {
 
 entity "outdoor_data_cache" as outdoor {
   * id : SERIAL <<PK>>
+=======
+entity "User" as user {
+  * id : INT <<PK>>
+  --
+  * email : VARCHAR(255) <<UNIQUE>>
+  * password_hash : VARCHAR(255)
+  * created_at : DATETIME
+}
+
+entity "IndoorData" as indoor_data {
+  * id : INT <<PK>>
+  --
+  * user_id : INT <<FK>>
+  * temperature : FLOAT
+  * humidity : FLOAT
+  * aqi : FLOAT
+  * timestamp : DATETIME
+}
+
+entity "OutdoorDataCache" as outdoor_cache {
+  * id : INT <<PK>>
+>>>>>>> 20f5fbe27cc37742b222d799b161ab7508b3a827
   --
   * location : VARCHAR(255)
   * temperature : FLOAT
   * humidity : FLOAT
+<<<<<<< HEAD
   rainfall : FLOAT
   * aqi : FLOAT
   * aqi_grade : VARCHAR(20)
@@ -230,3 +259,46 @@ v1.0 db_schema.txt 대비 제거된 테이블
 - IndoorData, NoiseData, SleepSession, NoiseSpike
   → measurement_sessions + spikes 로 통합
   → 실내 센서 원시값은 서버 미저장
+=======
+  * aqi : FLOAT
+  * uv_index : FLOAT
+  * timestamp : DATETIME
+}
+
+entity "NoiseData" as noise_data {
+  * id : INT <<PK>>
+  --
+  * user_id : INT <<FK>>
+  * decibel_level : FLOAT
+  * timestamp : DATETIME
+}
+
+entity "SleepSession" as sleep_session {
+  * id : INT <<PK>>
+  --
+  * user_id : INT <<FK>>
+  * start_time : DATETIME
+  * end_time : DATETIME
+  * sleep_quality : VARCHAR(50)
+  * spike_count : INT
+  * created_at : DATETIME
+}
+
+entity "NoiseSpike" as noise_spike {
+  * id : INT <<PK>>
+  --
+  * sleep_session_id : INT <<FK>>
+  * decibel_level : FLOAT
+  * timestamp : DATETIME
+}
+
+' Relationships
+user ||--o{ indoor_data : "records"
+user ||--o{ noise_data : "records"
+user ||--o{ sleep_session : "has"
+sleep_session ||--o{ noise_spike : "contains"
+
+note right of outdoor_cache : Used for caching\nWeather API responses
+
+@enduml
+>>>>>>> 20f5fbe27cc37742b222d799b161ab7508b3a827
