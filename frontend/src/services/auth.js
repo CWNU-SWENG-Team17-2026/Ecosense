@@ -19,3 +19,13 @@ export const getMe = async () => {
   const response = await api.get('/auth/me');
   return response.data;
 };
+
+export const verifyEmail = async (email, code) => {
+  const response = await api.post('/auth/verify', { email, code });
+  return response.data;
+};
+
+export const resendVerify = async (email) => {
+  const response = await api.post('/auth/resend-verify', { email });
+  return response.data;
+};

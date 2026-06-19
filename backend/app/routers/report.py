@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
@@ -29,6 +28,8 @@ def download_report(
     try:
         pdf_bytes, _ = generate_report_pdf(db, current_user.id, period)
     except Exception as exc:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"보고서 생성에 실패했습니다: {exc}",

@@ -1,13 +1,11 @@
 from datetime import datetime
-
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.database import Base
 
 
 class ReportHistory(Base):
-    __tablename__ = "report_history"
+    __tablename__ = "report_histories"  # 기존 DB 테이블명에 맞춤
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)

@@ -1,65 +1,135 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-import { register } from '../services/auth';
+import { register, verifyEmail, resendVerify } from '../services/auth';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
 
+  const [step, setStep] = useState('form'); // 'form' | 'verify'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const getErrorMessage = (err) => {
-    const status = err?.response?.status;
-    const detail = err?.response?.data?.detail;
-    if (status === 400) {
-      if (typeof detail === 'string' && detail.includes('이미')) return '이미 가입된 이메일입니다.';
-      if (typeof detail === 'string') return detail;
-      return '입력값을 확인해주세요.';
-    }
-    if (status === 422) {
-      // Pydantic 유효성 검사 실패
-      const msgs = Array.isArray(detail)
-        ? detail.map((d) => d?.msg ?? '').filter(Boolean)
-        : [];
-      if (msgs.some((m) => m.toLowerCase().includes('min_length') || m.includes('4')))
-        return '비밀번호는 최소 4자 이상이어야 합니다.';
-      if (msgs.length > 0) return msgs[0];
-      return '입력값이 올바르지 않습니다.';
-    }
-    return '회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.';
-  };
+  const passwordMismatch = passwordConfirm.length > 0 && password !== passwordConfirm;
 
   const handleRegister = async () => {
     setError('');
+    if (!name.trim()) { setError('이름을 입력해주세요.'); return; }
     if (!email.trim()) { setError('이메일을 입력해주세요.'); return; }
-    if (password.length < 4) { setError('비밀번호는 최소 4자 이상이어야 합니다.'); return; }
+    if (password.length < 8) { setError('비밀번호는 최소 8자 이상이어야 합니다.'); return; }
+    if (password !== passwordConfirm) { setError('비밀번호가 일치하지 않습니다.'); return; }
     setIsLoading(true);
     try {
-      await register({ email, password });
-      alert('회원가입이 완료되었습니다.');
-      navigate('/login');
+      await register({ email, password, name, phone });
+      setStep('verify');
     } catch (err) {
-      console.error('회원가입 실패:', err);
-      setError(getErrorMessage(err));
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      if (status === 400) setError(typeof detail === 'string' ? detail : '이미 등록된 이메일입니다.');
+      else setError('회원가입에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleVerify = async () => {
+    setError('');
+    if (!code.trim()) { setError('인증코드를 입력해주세요.'); return; }
+    setIsLoading(true);
+    try {
+      await verifyEmail(email, code);
+      alert('이메일 인증이 완료되었습니다!');
+      navigate('/login');
+    } catch (err) {
+      setError('인증코드가 올바르지 않거나 만료되었습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError('');
+    try {
+      await resendVerify(email);
+      alert('인증코드가 재발송되었습니다.');
+    } catch {
+      setError('인증코드 재발송에 실패했습니다.');
+    }
+  };
+
+  // 인증코드 입력 화면
+  if (step === 'verify') {
+    return (
+      <section className="login-page">
+        <div className="login-card">
+          <h1>EcoSense</h1>
+          <p style={{ fontSize: '0.9rem', color: '#52525b', marginBottom: '12px' }}>
+            <b>{email}</b>로 인증코드를 발송했습니다.
+          </p>
+          <label>
+            인증코드
+            <input
+              value={code}
+              onChange={(e) => { setCode(e.target.value); setError(''); }}
+              placeholder="6자리 인증코드"
+              maxLength={6}
+              onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
+            />
+          </label>
+          {error && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: '4px 0' }}>{error}</p>}
+          <button type="button" onClick={handleVerify} disabled={isLoading}>
+            {isLoading ? '확인 중...' : '인증 완료'}
+          </button>
+          <button
+            type="button"
+            onClick={handleResend}
+            style={{ background: 'none', color: '#2e7d5e', border: '1px solid #2e7d5e' }}
+          >
+            인증코드 재발송
+          </button>
+          <button type="button" onClick={() => setStep('form')}>
+            이전으로
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // 회원가입 입력 화면
   return (
     <section className="login-page">
       <div className="login-card">
         <h1>EcoSense</h1>
 
         <label>
-          이메일
+          이름
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="이름"
+          />
+        </label>
+
+        <label>
+          전화번호
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="010-0000-0000"
+          />
+        </label>
+
+        <label>
+          이메일 (로그인 아이디)
           <input
             value={email}
-            onChange={(event) => { setEmail(event.target.value); setError(''); }}
-            placeholder="이메일"
+            onChange={(e) => { setEmail(e.target.value); setError(''); }}
+            placeholder="이메일 (로그인 시 사용)"
             type="email"
           />
         </label>
@@ -69,20 +139,31 @@ export default function RegisterPage() {
           <input
             type="password"
             value={password}
-            onChange={(event) => { setPassword(event.target.value); setError(''); }}
-            placeholder="비밀번호 (최소 4자)"
+            onChange={(e) => { setPassword(e.target.value); setError(''); }}
+            placeholder="비밀번호 (8자 이상)"
           />
-          <span style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '4px', display: 'block' }}>
-            영문, 숫자 포함 최소 4자 · 최대 128자
-          </span>
         </label>
 
-        {error && (
-          <p style={{ color: '#f87171', fontSize: '0.85rem', margin: '4px 0' }}>{error}</p>
-        )}
+        <label>
+          비밀번호 확인
+          <input
+            type="password"
+            value={passwordConfirm}
+            onChange={(e) => { setPasswordConfirm(e.target.value); setError(''); }}
+            placeholder="비밀번호 확인"
+            style={{ borderColor: passwordMismatch ? '#ef4444' : '' }}
+          />
+          {passwordMismatch && (
+            <span style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+              비밀번호가 다릅니다.
+            </span>
+          )}
+        </label>
+
+        {error && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: '4px 0' }}>{error}</p>}
 
         <button type="button" onClick={handleRegister} disabled={isLoading}>
-          {isLoading ? '가입 중...' : '회원가입'}
+          {isLoading ? '처리 중...' : '인증코드 발송'}
         </button>
 
         <button type="button" onClick={() => navigate('/login')}>

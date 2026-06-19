@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import SessionLocal, init_db
-from app.routers import auth, location, outdoor, report, sessions, spikes, sync
+from app.routers import auth, location, outdoor, report, sessions, spikes, sync, survey
 from app.utils.cleanup import cleanup_expired_data
 
 settings = get_settings()
@@ -36,6 +36,7 @@ app.include_router(sync.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(spikes.router, prefix="/api")
 app.include_router(report.router, prefix="/api")
+app.include_router(survey.router, prefix="/api")
 
 
 @app.get("/")
