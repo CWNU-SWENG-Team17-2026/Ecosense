@@ -2,13 +2,16 @@ import axios from 'axios';
 
 import { useAuthStore } from '../stores/useAuthStore';
 
+const normalizeApiBaseUrl = (raw: string): string => {
+  // https://host | https://host/api | https://host/api/ 모두 → https://host/api/
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  const withApi = trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+  return `${withApi}/`;
+};
+
 const rawBaseUrl =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
-// axios는 url이 '/'로 시작하면 baseURL의 /api 경로가 빠지므로 trailing slash 고정
-const API_BASE_URL = (rawBaseUrl.endsWith('/api')
-  ? rawBaseUrl
-  : `${rawBaseUrl.replace(/\/$/, '')}/api`
-).replace(/\/?$/, '/');
+const API_BASE_URL = normalizeApiBaseUrl(rawBaseUrl);
 
 const normalizeUrl = (url: string) => url.replace(/^\/+/, '');
 
