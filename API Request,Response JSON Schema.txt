@@ -1,27 +1,41 @@
 
-✅ API Request/Response JSON Schema (v1.1 — 코드 기준, 2026-06)
+✅ API Request/Response JSON Schema (v1.2 — 코드 기준, 2026-06)
 
-※ 실제 FastAPI 응답은 아래 스키마를 직접 반환합니다.
-  공통 ApiResponse 래퍼(success/data/timestamp)는 사용하지 않습니다.
+※ FastAPI는 아래 스키마를 직접 반환합니다. 공통 ApiResponse 래퍼는 사용하지 않습니다.
 
 ────────────────────────────────────────
 1. Auth
 ────────────────────────────────────────
 
 POST /api/auth/register
+→ { message: string }
+Request: { email, password, name?, phone? }
+
+POST /api/auth/verify
+→ { message: string }
+Request: { email, code }
+
+POST /api/auth/resend-verify
+→ { message: string }
+Request: { email }
+
 POST /api/auth/login
+→ UserResponse + Set-Cookie
+
+GET /api/auth/me
 → UserResponse
-{
+
+interface UserResponse {
   id: string;
   email: string;
-  created_at: string;   // ISO 8601
+  name?: string;
+  phone?: string;
+  created_at: string;      // ISO 8601
+  is_verified: boolean;
 }
 
-POST /api/auth/refresh
-→ { message: string }
-
-POST /api/auth/logout
-→ { message: string }
+POST /api/auth/refresh → { message: string }
+POST /api/auth/logout  → { message: string }
 
 ────────────────────────────────────────
 2. Sync
@@ -30,9 +44,9 @@ POST /api/auth/logout
 POST /api/sync/upload
 interface SyncUploadRequest {
   sessions: {
-    id: string;                    // client-generated UUID
+    id: string;
     type: 'OUTDOOR' | 'INDOOR' | 'SLEEP';
-    started_at: string;            // ISO 8601
+    started_at: string;
     ended_at?: string;
   }[];
   spikes: {
@@ -58,74 +72,13 @@ interface SyncDownloadResponse {
 ────────────────────────────────────────
 3. Sessions / Spikes
 ────────────────────────────────────────
-
-GET /api/sessions?offset=0&limit=20
-interface SessionListResponse {
-  sessions: {
-    id: string;
-    type: 'OUTDOOR' | 'INDOOR' | 'SLEEP';
-    started_at: string;
-    ended_at?: string;
-    spike_count: number;
-  }[];
-  total: number;
-  has_more: boolean;
-}
-
-GET /api/sessions/{id}
-interface SessionDetailResponse {
-  id: string;
-  type: 'OUTDOOR' | 'INDOOR' | 'SLEEP';
-  started_at: string;
-  ended_at?: string;
-  spike_summary: {
-    count: number;
-    avg_db_level?: number;
-    max_db_level?: number;
-  };
-}
-
-GET /api/sessions/{id}/spikes
-interface SessionSpikesResponse {
-  spikes: {
-    id: string;
-    detected_at: string;
-    db_level: number;
-    duration_sec: number;
-  }[];
-}
-
-POST /api/sessions/{session_id}/spikes
-interface CreateSpikeRequest {
-  detected_at: string;
-  db_level: number;
-  duration_sec: number;
-}
-interface CreateSpikeResponse {
-  spike_id: string;
-}
-
-DELETE /api/sessions/{id}
-→ { deleted_spikes_count: number }
-
-DELETE /api/sessions
-→ { deleted_sessions: number; deleted_spikes: number }
-
-DELETE /api/sessions/{id}/spikes
-→ { deleted_count: number }
-
-DELETE /api/spikes/{spike_id}
-→ { deleted_count: number }
-
-POST /api/sessions/cleanup
-→ { deleted_spikes: number; deleted_sessions: number }
+(v1.1과 동일 — SessionListResponse, SessionDetailResponse, CreateSpikeRequest 등)
 
 ────────────────────────────────────────
 4. Outdoor
 ────────────────────────────────────────
 
-GET /api/outdoor?location=경남 창원시 의창구
-GET /api/outdoor?location=35.2280,128.6820   // GPS 좌표도 가능
+GET /api/outdoor?location=...&force_refresh=false
 interface OutdoorResponse {
   location: string;
   temperature: number;
@@ -137,9 +90,12 @@ interface OutdoorResponse {
   pm10?: number;
   uv_index?: number;
   weather_description: string;
-  cached: boolean;          // TTL 내 캐시 히트 여부
-  is_mock: boolean;           // API 키 없음/실패 시 mock 데이터
-  last_updated: string;       // ISO 8601
+  weather_source?: 'ultra_ncst' | 'asos_hourly' | 'vilage_fcst' | null;
+  weather_station?: string | null;
+  weather_observed_at?: string | null;   // ISO 8601
+  cached: boolean;
+  is_mock: boolean;
+  last_updated: string;
 }
 
 GET /api/outdoor/history?location=&hours=12
@@ -147,45 +103,52 @@ interface OutdoorHistoryResponse {
   records: OutdoorResponse[];
 }
 
+데이터 소스:
+- 기상: KMA 초단기실황(우선) → ASOS 시간관측(폴백)
+- 대기질: 에어코리아 실시간 측정
+
 ────────────────────────────────────────
 5. Location
 ────────────────────────────────────────
 
 GET /api/location/search?keyword=창원
-→ { name: string }[]
+→ { name: string; lat?: number; lon?: number }[]
 
 ────────────────────────────────────────
-6. Report
+6. Survey
+────────────────────────────────────────
+
+POST /api/survey  (로그인 필요)
+→ { message: string }
+Body: SurveyRequest (q1_age ~ q15_opinion, frontend/src/pages/SurveyPage.jsx 참고)
+
+GET /api/survey/me
+→ user_preferences + q15_opinion (없으면 404)
+
+DB: user_preferences, user_feedback (raw SQL 테이블, init_db 시 생성)
+
+────────────────────────────────────────
+7. Report
 ────────────────────────────────────────
 
 GET /api/report/history?limit=10
-→ ReportHistoryItem[]    // 배열 직접 반환 (래퍼 없음)
-interface ReportHistoryItem {
-  id: string;
-  period: 'weekly' | 'monthly';
-  created_at: string;
-  summary_text?: string;
-}
+→ ReportHistoryItem[]
 
 GET /api/report/download?period=weekly|monthly
-→ application/pdf (바이너리 스트림)
+→ application/pdf (설문 맞춤 코멘트 + 실외/수면 차트 포함)
 
 ────────────────────────────────────────
-7. Health
+8. Health
 ────────────────────────────────────────
 
-GET /health
-→ { status: "ok" }
+GET /health → { status: "ok" }
 
 ────────────────────────────────────────
-타입 정의 위치
+v1.2 변경 (v1.1 대비)
 ────────────────────────────────────────
-- 백엔드: backend/app/schemas/
-- 프론트: frontend/src/types/api.ts, frontend/src/types/domain.ts
-
-v1.1 변경 요약 (v1.0 대비)
-- GET /api/sessions: days → offset/limit 페이지네이션
-- OutdoorResponse에 is_mock 추가
-- OutdoorHistoryResponse, /api/location/search 추가
-- register 응답: message → UserResponse
-- 공통 ApiResponse 래퍼는 설계안에만 존재 (미구현)
+- Auth: register → message + 이메일 인증 flow (/verify, /resend-verify)
+- UserResponse: name, phone, is_verified 추가
+- OutdoorResponse: weather_source, weather_station, weather_observed_at, force_refresh
+- Location search: lat/lon 포함, Nominatim 연동
+- Survey API 추가
+- Report PDF: 설문 기반 맞춤 리포트 (matplotlib 차트)

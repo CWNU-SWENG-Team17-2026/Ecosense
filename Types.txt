@@ -1,352 +1,73 @@
+EcoSense Types 요약 (v1.2 — 2026-06, 코드 기준)
 
-✅ types (v1.0)
+※ 전체 정의는 아래 소스가 정본입니다.
+  - frontend/src/types/domain.ts
+  - frontend/src/types/api.ts
+  - frontend/src/types/store.ts
+  - backend/app/schemas/
 
-1. 'src/types/domain.ts'
-export type SessionType = 'OUTDOOR' | 'INDOOR' | 'SLEEP';
-export type AqiGrade = 'good' | 'moderate' | 'bad' | 'very_bad';
+────────────────────────────────────────
+domain.ts — 핵심 도메인
+────────────────────────────────────────
 
-export interface User {
-  id: string;
-  email: string;
-  created_at: string;
+SessionType = 'OUTDOOR' | 'INDOOR' | 'SLEEP'
+AqiGrade = 'good' | 'moderate' | 'bad' | 'very_bad'
+
+User { id, email, created_at }  // /auth/me: name?, phone?, is_verified 추가
+
+Session { id, type, started_at, ended_at?, spike_count? }
+Spike { id, session_id, detected_at, db_level, duration_sec }
+SpikeRecord extends Spike { blob, expires_at }
+
+OutdoorData {
+  location, temperature, humidity, rainfall?, aqi, aqi_grade,
+  pm25, pm10?, uv_index?, weather_description,
+  weather_source?, weather_station?, weather_observed_at?,  // KMA/ASOS 출처
+  cached, is_mock?, last_updated
 }
 
-export interface Session {
-  id: string;
-  type: SessionType;
-  started_at: string;
-  ended_at?: string;
-  spike_count?: number;
-}
+ReportHistory { id, period: 'weekly'|'monthly', created_at, summary_text? }
 
-export interface Spike {
-  id: string;
-  session_id: string;           // ← 필수 (IndexedDB 연동 핵심)
-  detected_at: string;
-  db_level: number;
-  duration_sec: number;
-}
+────────────────────────────────────────
+store.ts / Zustand
+────────────────────────────────────────
 
-/** IndexedDB에 실제 저장되는 레코드 (Blob 포함) */
-export interface SpikeRecord extends Spike {
-  blob: Blob;
-  expires_at: number;
-}
+AuthState → useAuthStore:
+  - isAuthenticated (v1.0 문서의 isLoggedIn 아님)
+  - isInitializing, user { email, id? }
 
-export interface OutdoorData {
-  location: string;
-  temperature: number;
-  humidity: number;
-  rainfall?: number;
-  aqi: number;
-  aqi_grade: AqiGrade;
-  pm25: number;
-  pm10?: number;
-  uv_index?: number;
-  weather_description: string;
-  cached: boolean;
-  last_updated: string;
-}
+NoiseState → useNoiseStore:
+  - mode: 'normal' | 'sleep'
+  - backgroundDb 초기값 -60 (store), useAudio 로컬 state는 -65
+  - history[] (차트용), clearSpikes()
 
-export interface ReportHistory {
-  id: string;
-  period: 'weekly' | 'monthly';
-  created_at: string;
-  summary_text?: string;
-}
+OutdoorState, SensorState, ReportState — store.ts 참고
 
+────────────────────────────────────────
+api.ts — 백엔드 계약
+────────────────────────────────────────
 
-2. `types/api.ts`
-// ✅ 제네릭 제대로 선언
-export interface ApiResponse<T = any> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errorCode?: string;
-  timestamp: string;
-}
+SyncUploadRequest / SyncUploadResponse
+SessionListResponse, SessionDetailResponse, SessionSpikesResponse
+CreateSpikeRequest / CreateSpikeResponse
+OutdoorResponse (+ OutdoorHistoryResponse)
+ReportHistoryItem[]  — GET /report/history는 배열 직접 반환
 
-// Sync
-export interface SyncUploadRequest {
-  sessions: {
-    id: string;
-    type: SessionType;
-    started_at: string;
-    ended_at?: string;
-  }[];
-  spikes: {
-    session_id: string;
-    detected_at: string;
-    db_level: number;
-    duration_sec: number;
-  }[];
-}
+Survey 타입은 SurveyPage + backend/app/schemas/survey.py 참고 (api.ts 미정의)
 
-export interface SyncUploadResponse {
-  synced_sessions: number;
-  synced_spikes: number;
-  failed_session_ids?: string[];
-}
+────────────────────────────────────────
+v1.0 문서 대비 변경점
+────────────────────────────────────────
 
-// Sessions
-export interface SessionListResponse {
-  sessions: {
-    id: string;
-    type: SessionType;
-    started_at: string;
-    ended_at?: string;
-    spike_count: number;
-  }[];
-  total: number;
-  has_more: boolean;
-}
+| 항목 | v1.0 문서 | 현재 코드 |
+|------|-----------|-----------|
+| DB | MariaDB | PostgreSQL (Render) |
+| Auth | isLoggedIn | isAuthenticated |
+| backgroundDb | -45 | -60 (store) |
+| Outdoor 캐시 | 인메모리 | outdoor_data_cache 테이블 TTL |
+| useSync download | saveSpikeWithBlob | saveSpikeMetadata + saveSession |
+| 회원가입 | 즉시 로그인 | 이메일 인증 (Brevo) |
+| API | 기상청만 | KMA 초단기/ASOS + 에어코리아 |
 
-export interface SessionDetailResponse {
-  id: string;
-  type: SessionType;
-  started_at: string;
-  ended_at?: string;
-  spike_summary: {
-    count: number;
-    avg_db_level?: number;
-    max_db_level?: number;
-  };
-}
-
-export interface SessionSpikesResponse {
-  spikes: Spike[];
-}
-
-// Spikes
-export interface CreateSpikeRequest {
-  detected_at: string;
-  db_level: number;
-  duration_sec: number;
-}
-
-export interface CreateSpikeResponse {
-  spike_id: string;
-}
-
-// Outdoor
-export interface OutdoorResponse {
-  location: string;
-  temperature: number;
-  humidity: number;
-  rainfall?: number;
-  aqi: number;
-  aqi_grade: AqiGrade;
-  pm25: number;
-  pm10?: number;
-  uv_index?: number;
-  weather_description: string;
-  cached: boolean;
-  last_updated: string;
-}
-
-// Reports
-export interface ReportHistoryResponse {
-  history: ReportHistory[];
-}
-
-3. 'src/types/store.ts'
-import { User, Session, Spike, OutdoorData, ReportHistory } from './domain';
-
-export interface AuthState {
-  user: User | null;
-  isLoggedIn: boolean;
-}
-
-export interface OutdoorState {
-  data: OutdoorData | null;
-  lastUpdated: string | null;
-  isLoading: boolean;
-  isCached: boolean;
-}
-
-export interface SensorState {
-  temperature: number;
-  humidity: number;
-  battery: number;
-  connected: boolean;
-  lastUpdated: string | null;
-}
-
-export interface NoiseState {
-  currentDb: number;
-  backgroundDb: number;
-  spikes: Spike[];
-  isMeasuring: boolean;
-  sessionId: string | null;
-  isSpiking: boolean;
-  sessionStartTime: string | null;
-}
-
-export interface ReportState {
-  history: ReportHistory[];
-  isLoading: boolean;
-}
-
-
-
-
-4. 'src/stores/useNoiseStore.ts'
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { NoiseState, Spike, SessionType } from '../types/store';
-
-interface NoiseStore extends NoiseState {
-  setCurrentDb: (db: number) => void;
-  setBackgroundDb: (db: number) => void;
-  addSpike: (spike: Spike) => void;
-  setSessionId: (id: string | null) => void;
-  setIsSpiking: (isSpiking: boolean) => void;
-  setIsMeasuring: (isMeasuring: boolean) => void;
-
-  startNewSession: (type: SessionType) => string;
-  endCurrentSession: () => void;
-  clearCurrentSpikes: () => void;
-}
-
-export const useNoiseStore = create<NoiseStore>()(
-  persist(
-    (set, get) => ({
-      currentDb: -Infinity,
-      backgroundDb: -45,
-      spikes: [],
-      isMeasuring: false,
-      sessionId: null,
-      isSpiking: false,
-      sessionStartTime: null,           // ← 초기값 필수!
-
-      setCurrentDb: (db) => set({ currentDb: db }),
-      setBackgroundDb: (db) => set({ backgroundDb: db }),
-      addSpike: (spike) => set((state) => ({ spikes: [...state.spikes, spike] })),
-      setSessionId: (id) => set({ sessionId: id }),
-      setIsSpiking: (isSpiking) => set({ isSpiking }),
-      setIsMeasuring: (isMeasuring) => set({ isMeasuring }),
-
-      startNewSession: (type: SessionType) => {
-        const id = crypto.randomUUID();
-        const startTime = new Date().toISOString();
-
-        set({
-          sessionId: id,
-          sessionStartTime: startTime,
-          spikes: [],
-          isSpiking: false,
-        });
-
-        console.log(`🆕 새 ${type} 세션 시작: ${id} (${startTime})`);
-        return id;
-      },
-
-      endCurrentSession: () => {
-        const { sessionId } = get();
-        if (sessionId) console.log(`🏁 세션 종료: ${sessionId}`);
-
-        set({ 
-          sessionId: null, 
-          sessionStartTime: null,   // ← 같이 초기화 (중요!)
-          isSpiking: false 
-        });
-      },
-
-      clearCurrentSpikes: () => set({ spikes: [] }),
-    }),
-    {
-      name: 'noise-storage',
-      partialize: (state) => ({
-        spikes: state.spikes,
-        sessionId: state.sessionId,
-        sessionStartTime: state.sessionStartTime,   // ← persist에도 추가!
-      }),
-    }
-  )
-);
-
-5. useSync
-// src/hooks/useSync.ts
-import { useCallback, useEffect } from 'react';
-import { useAuthStore } from '../stores/useAuthStore';
-import { useNoiseStore } from '../stores/useNoiseStore';
-import api from '../services/api';
-import { SyncUploadRequest } from '../types/api';
-import { getSpikesBySession, saveSpikeWithBlob } from '../services/indexedDB';
-
-export const useSync = () => {
-  const { isLoggedIn } = useAuthStore();
-  const { 
-    sessionId, 
-    spikes, 
-    sessionStartTime, 
-    startNewSession, 
-    endCurrentSession 
-  } = useNoiseStore();
-
-  /** 현재 세션 업로드 */
-  const uploadToServer = useCallback(async () => {
-    if (!isLoggedIn || !sessionId) return;
-
-    try {
-      const sessionSpikes = await getSpikesBySession(sessionId);
-
-      const payload: SyncUploadRequest = {
-        sessions: [
-          {
-            id: sessionId,
-            type: 'SLEEP',
-            started_at: sessionStartTime || new Date().toISOString(),
-            ended_at: new Date().toISOString(),
-          },
-        ],
-        spikes: sessionSpikes.map((s) => ({
-          session_id: s.session_id,
-          detected_at: s.detected_at,
-          db_level: s.db_level,
-          duration_sec: s.duration_sec,
-        })),
-      };
-
-      const res = await api.post('/sync/upload', payload);
-      console.log(`✅ 서버 업로드 성공! ${res.data.synced_spikes}개 스파이크`);
-    } catch (err) {
-      console.error('❌ 서버 업로드 실패:', err);
-    }
-  }, [isLoggedIn, sessionId, sessionStartTime]);
-
-  /** 서버 다운로드 + merge */
-  const downloadFromServer = useCallback(async () => {
-    if (!isLoggedIn) return;
-
-    try {
-      const res = await api.get('/sync/download?days=30');
-      const serverSpikes = res.data?.spikes || [];
-
-      let mergedCount = 0;
-      for (const spike of serverSpikes) {
-        await saveSpikeWithBlob(spike, new Blob()); // blob은 클라이언트 전용
-        mergedCount++;
-      }
-
-      console.log(`✅ 서버 다운로드 + merge 완료! ${mergedCount}개 스파이크`);
-    } catch (err) {
-      console.error('❌ 서버 다운로드 실패:', err);
-    }
-  }, [isLoggedIn]);
-
-  /** 자동 업로드 (debounce) */
-  useEffect(() => {
-    if (!isLoggedIn || !sessionId || spikes.length === 0) return;
-
-    const timeout = setTimeout(uploadToServer, 2000);
-    return () => clearTimeout(timeout);
-  }, [isLoggedIn, sessionId, spikes.length, uploadToServer]);
-
-  /** 로그인 직후 다운로드 */
-  useEffect(() => {
-    if (isLoggedIn) downloadFromServer();
-  }, [isLoggedIn, downloadFromServer]);
-
-  return { uploadToServer, downloadFromServer };
-};
+Types.txt에 전체 store/hook 소스 복붙은 유지보수 부담으로 제거함.
+useAudio 동작은 useAudio.txt, IndexedDB는 indexedDB.txt 참고.

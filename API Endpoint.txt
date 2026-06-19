@@ -1,30 +1,43 @@
 No,Method,Endpoint,설명,Auth,Request / Query,Response,비고
-1,POST,/api/auth/register,회원가입,No,"{ email, password }","UserResponse { id, email, created_at }",password 최소 4자
-2,POST,/api/auth/login,로그인,No,"{ email, password }",UserResponse + Set-Cookie (HttpOnly),Access + Refresh Token 발급
-3,POST,/api/auth/refresh,Access Token 갱신,Yes (Refresh Cookie),-,{ message },Set-Cookie로 access/refresh 재발급
-4,POST,/api/auth/logout,로그아웃,Yes,-,{ message },쿠키 삭제
-5,GET,/api/auth/me,현재 로그인 사용자 정보,Yes,-,UserResponse,-
-6,GET,/api/outdoor,기상청 + 에어코리아 프록시 + 캐싱,No,?location=경남 창원시 의창구,OutdoorResponse,location 문자열 또는 "lat,lon" GPS 좌표 지원. 백엔드에서 격자/측정소 변환
-7,GET,/api/outdoor/history,실외 데이터 시계열 (그래프용),No,?location=&hours=12 (1~72),OutdoorHistoryResponse,DB 캐시 기록 반환
-8,GET,/api/location/search,지역 검색 (목록),No,?keyword=창원,[{ name }],하드코딩 목록 + 키워드 미매칭 시 입력값 그대로 반환
-9,POST,/api/sync/upload,로컬 데이터 배치 업로드,Yes,"{ sessions, spikes }","{ synced_sessions, synced_spikes, failed_session_ids? }",client-generated ID 기준 upsert
-10,GET,/api/sync/download,서버 데이터 다운로드 (병합용),Yes,?days=30 (1~30),"{ sessions, spikes }",-
-11,GET,/api/sessions,세션 목록 조회,Yes,?offset=0&limit=20,SessionListResponse,페이지네이션 (total/has_more 포함)
-12,GET,/api/sessions/{id},특정 세션 상세 + 스파이크 요약,Yes,-,SessionDetailResponse,통계는 spike_summary 필드
-13,GET,/api/sessions/{id}/spikes,특정 세션의 스파이크 목록,Yes,-,SessionSpikesResponse,수면 분석/기록 화면용
-14,POST,/api/sessions/{session_id}/spikes,스파이크 메타데이터 저장,Yes,"{ detected_at, db_level, duration_sec }",{ spike_id },-
-15,DELETE,/api/sessions/{id},개별 세션 삭제 (연관 스파이크 Cascade),Yes,-,{ deleted_spikes_count },-
-16,DELETE,/api/sessions,전체 세션 + 스파이크 초기화,Yes,-,"{ deleted_sessions, deleted_spikes }",FR-S005
-17,DELETE,/api/sessions/{id}/spikes,특정 세션의 스파이크만 삭제,Yes,-,{ deleted_count },-
-18,POST,/api/sessions/cleanup,30일 경과 데이터 정리,Yes,-,"{ deleted_spikes, deleted_sessions }",앱 시작 시 백엔드도 30일 정리 실행
-19,DELETE,/api/spikes/{spike_id},개별 스파이크 삭제,Yes,-,{ deleted_count },sessions 라우터와 분리된 전용 라우터
-20,GET,/api/report/history,PDF 보고서 생성 이력 조회,Yes,?limit=10 (1~50),ReportHistoryItem[],배열 직접 반환
-21,GET,/api/report/download,PDF 보고서 생성 + 다운로드,Yes,?period=weekly|monthly,application/pdf,한글 폰트 지원. 생성 후 ReportHistory 자동 기록
-22,GET,/health,서버 헬스체크,No,-,{ status: "ok" },-
-23,GET,/,API 루트,No,-,"{ message, docs }",Swagger: /docs
+1,POST,/api/auth/register,회원가입 + 이메일 인증코드 발송,No,"{ email, password, name?, phone? }",{ message },Brevo 발송. DB에 미인증 사용자 저장
+2,POST,/api/auth/verify,이메일 인증코드 확인,No,"{ email, code }",{ message },인증 완료 후 is_verified=true
+3,POST,/api/auth/resend-verify,인증코드 재발송,No,{ email },{ message },10분 유효
+4,POST,/api/auth/login,로그인,No,"{ email, password }",UserResponse + Set-Cookie,Access + Refresh Token
+5,POST,/api/auth/refresh,Access Token 갱신,Yes (Refresh Cookie),-,{ message },Set-Cookie 재발급
+6,POST,/api/auth/logout,로그아웃,Yes,-,{ message },쿠키 삭제
+7,GET,/api/auth/me,현재 로그인 사용자,Yes,-,UserResponse,"id, email, name, phone, is_verified, created_at"
+8,GET,/api/outdoor,기상청 + 에어코리아 프록시 + 캐싱,No,?location=&force_refresh=false,OutdoorResponse,"location 문자열 또는 lat,lon. weather_source/station/observed_at 포함"
+9,GET,/api/outdoor/history,실외 시계열 (그래프),No,?location=&hours=12 (1~72),OutdoorHistoryResponse,DB 캐시 기록
+10,GET,/api/location/search,지역 검색,No,?keyword=창원,[{ name, lat?, lon? }],Nominatim 지오코oding + ASOS/행정구역 병합
+11,POST,/api/sync/upload,로컬 데이터 업로드,Yes,"{ sessions, spikes }","{ synced_sessions, synced_spikes, failed_session_ids? }",client ID upsert
+12,GET,/api/sync/download,서버 데이터 다운로드,Yes,?days=30 (1~30),"{ sessions, spikes }",-
+13,GET,/api/sessions,세션 목록,Yes,?offset=0&limit=20,SessionListResponse,페이지네이션
+14,GET,/api/sessions/{id},세션 상세 + 스파이크 요약,Yes,-,SessionDetailResponse,-
+15,GET,/api/sessions/{id}/spikes,세션 스파이크 목록,Yes,-,SessionSpikesResponse,-
+16,POST,/api/sessions/{session_id}/spikes,스파이크 메타 저장,Yes,"{ detected_at, db_level, duration_sec }",{ spike_id },-
+17,DELETE,/api/sessions/{id},세션 삭제 (Cascade),Yes,-,{ deleted_spikes_count },-
+18,DELETE,/api/sessions,전체 세션 초기화,Yes,-,"{ deleted_sessions, deleted_spikes }",-
+19,DELETE,/api/sessions/{id}/spikes,세션 스파이크만 삭제,Yes,-,{ deleted_count },-
+20,POST,/api/sessions/cleanup,30일 경과 정리,Yes,-,"{ deleted_spikes, deleted_sessions }",앱 시작 시 백엔드도 실행
+21,DELETE,/api/spikes/{spike_id},개별 스파이크 삭제,Yes,-,{ deleted_count },-
+22,POST,/api/survey,설문조사 제출,Yes,SurveyRequest,{ message },user_preferences / user_feedback 저장
+23,GET,/api/survey/me,내 설문 결과,Yes,-,SurveyResponse dict,404 if 없음
+24,GET,/api/report/history,PDF 이력,Yes,?limit=10 (1~50),ReportHistoryItem[],배열 직접 반환
+25,GET,/api/report/download,PDF 생성 + 다운로드,Yes,?period=weekly|monthly,application/pdf,설문+실외+수면 통합 리포트
+26,GET,/health,헬스체크,No,-,{ status: "ok" },-
+27,GET,/,API 루트,No,-,"{ message, docs }",Swagger: /docs
 
-[환경 설정 참고]
-- CORS: CORS_ORIGINS (vite dev 5173, preview 4173 포함 권장)
-- Outdoor: KMA_API_KEY, AIRKOREA_API_KEY 없으면 is_mock=true 폴백 데이터
-- DB: DATABASE_URL (SQLite 로컬 / MariaDB 운영)
-- 인증 쿠키: COOKIE_SECURE, COOKIE_SAMESITE
+[환경 설정 참고 — backend/.env / Render]
+- DATABASE_URL: SQLite(로컬) / postgresql+psycopg2://...(Render PostgreSQL)
+- CORS_ORIGINS: Vercel URL + localhost (쉼표 구분)
+- KMA_API_KEY: API허브 authKey (ASOS 시간관측 폴백)
+- KMA_FORECAST_SERVICE_KEY: 공공데이터 단기예보 serviceKey (초단기실황 우선)
+- AIRKOREA_API_KEY: 에어코리아 serviceKey (PM2.5/PM10)
+- BREVO_API_KEY, BREVO_SENDER_EMAIL: 회원가입 이메일 인증 (없으면 로그에 코드 출력)
+- OUTDOOR_CACHE_TTL_MINUTES: 기본 10
+- DEBUG=false, COOKIE_SECURE=true, COOKIE_SAMESITE=none (Vercel+Render cross-site)
+- RESET_DB_ON_STARTUP: 스키마 재생성 1회용 (true 후 false로 복구)
+- SECRET_KEY: 운영 시 32바이트+ 랜덤 필수
+
+[프론트 — Vercel]
+- VITE_API_BASE_URL=https://your-backend.onrender.com/api

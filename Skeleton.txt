@@ -1,4 +1,9 @@
-// src/pages/SleepPage.tsx
+※ Skeleton.txt — UI 레퍼런스 스니펫 (v1.0 초기 프로토타입)
+  실제 SleepPage.jsx는 탭(measure/history/analysis), NoiseChart, SessionHistory,
+  SleepAnalysisResult, useSync.uploadAllLocalData 등을 사용합니다.
+  훅 API(startAudioMonitoring 등)는 useAudio.ts와 동일.
+
+// src/pages/SleepPage.tsx (참고용 — 실제 파일은 .jsx)
 import { useAudio } from '../hooks/useAudio';
 import { useNoiseStore } from '../stores/useNoiseStore';
 import { useSync } from '../hooks/useSync';

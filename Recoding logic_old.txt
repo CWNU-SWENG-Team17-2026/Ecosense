@@ -1,3 +1,7 @@
+※ Recoding logic_old.txt — 폐기된 useAudio 스니펫 (아카이브)
+  현재 구현: useAudio.ts + useAudio.txt 참고.
+  isLoggedIn → isAuthenticated, getByteTimeDomainData → getFloatTimeDomainData 등 구버전.
+
 ---
 ### ✅ 최종 수정된 `startAudioMonitoring`
 ```ts
