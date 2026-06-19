@@ -17,6 +17,10 @@ export default function RegisterPage() {
 
   const passwordMismatch = passwordConfirm.length > 0 && password !== passwordConfirm;
 
+  const handlePhoneChange = (value) => {
+    setPhone(value.replace(/\D/g, '').slice(0, 11));
+  };
+
   const handleRegister = async () => {
     setError('');
     if (!name.trim()) { setError('이름을 입력해주세요.'); return; }
@@ -25,7 +29,7 @@ export default function RegisterPage() {
     if (password !== passwordConfirm) { setError('비밀번호가 일치하지 않습니다.'); return; }
     setIsLoading(true);
     try {
-      await register({ email, password, name, phone });
+      await register({ email, password, name, phone: phone || undefined });
       setStep('verify');
     } catch (err) {
       const status = err?.response?.status;
@@ -116,11 +120,14 @@ export default function RegisterPage() {
         </label>
 
         <label>
-          전화번호
+          전화번호 (선택)
           <input
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="010-0000-0000"
+            onChange={(e) => handlePhoneChange(e.target.value)}
+            placeholder="01012345678"
+            inputMode="numeric"
+            autoComplete="tel"
+            maxLength={11}
           />
         </label>
 
