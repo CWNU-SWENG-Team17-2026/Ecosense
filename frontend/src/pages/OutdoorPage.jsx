@@ -139,7 +139,7 @@ export default function OutdoorPage() {
 
   const aqiInfo = data ? gradeLabels[data.aqi_grade] ?? gradeLabels.good : null;
   const feelsLike = data
-    ? Number((data.temperature + (data.humidity - 50) * 0.05).toFixed(1))
+    ? Number((Number(data.temperature) + (Number(data.humidity) - 50) * 0.05).toFixed(1))
     : null;
   const aqiLabel = data
     ? gradeToKorean[data.aqi_grade] ?? data.aqi_grade
@@ -306,7 +306,7 @@ export default function OutdoorPage() {
             />
             <InfoCard
               title="UV"
-              value={String(data.uv_index ?? 0).toFixed(1)}
+              value={Number(data.uv_index ?? 0).toFixed(1)}
               description={getUvComment(Number(data.uv_index ?? 0))}
             />
             <InfoCard

@@ -1,8 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.config import get_settings
 from app.database import SessionLocal, init_db
@@ -42,6 +44,18 @@ if settings.cors_origin_regex_pattern:
 
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
 logger.info("CORSMiddleware enabled: origins=%s", settings.cors_origin_list)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+        )
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(location.router, prefix="/api")

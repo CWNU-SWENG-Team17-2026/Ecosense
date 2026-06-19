@@ -64,7 +64,7 @@ def drop_all_tables(engine: Engine) -> None:
     DROP TABLE IF EXISTS user_feedback CASCADE;
     DROP TABLE IF EXISTS user_preferences CASCADE;
     DROP TABLE IF EXISTS outdoor_data_cache CASCADE;
-    DROP TABLE IF EXISTS report_history CASCADE;
+    DROP TABLE IF EXISTS report_histories CASCADE;
     DROP TABLE IF EXISTS spikes CASCADE;
     DROP TABLE IF EXISTS measurement_sessions CASCADE;
     DROP TABLE IF EXISTS users CASCADE;

@@ -1,5 +1,8 @@
 # routers/auth.py
+import logging
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -23,6 +26,7 @@ from app.utils.jwt_utils import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 def _cookie_kwargs() -> dict:
@@ -73,12 +77,24 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             detail="이미 가입된 이메일입니다. 로그인 페이지에서 로그인해주세요.",
         )
 
-    success = create_user(db, payload)
-    if not success:
+    try:
+        create_user(db, payload)
+    except IntegrityError:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="이미 가입된 이메일입니다. 로그인 페이지에서 로그인해주세요.",
-        )
+        ) from None
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("register failed (database)")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "회원가입 DB 오류입니다. Render PostgreSQL 스키마가 구버전일 수 있습니다. "
+                "RESET_DB_ON_STARTUP=true 로 1회 재배포 후 false로 되돌리세요."
+            ),
+        ) from None
 
     return {"message": f"{payload.email}로 인증코드를 발송했습니다. 10분 이내에 인증해주세요."}
 
