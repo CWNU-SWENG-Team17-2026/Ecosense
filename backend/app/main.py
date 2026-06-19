@@ -13,6 +13,15 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if settings.reset_db_on_startup:
+        from app.database import engine
+        from app.utils.schema import drop_all_tables
+
+        if str(engine.url).startswith("postgresql"):
+            logger = __import__("logging").getLogger(__name__)
+            logger.warning("RESET_DB_ON_STARTUP=true → 전체 테이블 재생성")
+            drop_all_tables(engine)
+
     init_db()
     with SessionLocal() as db:
         cleanup_expired_data(db, days=30)

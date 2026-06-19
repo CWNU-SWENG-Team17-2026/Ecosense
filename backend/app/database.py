@@ -27,5 +27,7 @@ def get_db() -> Generator[Session, None, None]:
 
 def init_db() -> None:
     from app import models  # noqa: F401
+    from app.utils.schema import create_survey_tables
 
     Base.metadata.create_all(bind=engine)
+    create_survey_tables(engine)

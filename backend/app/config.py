@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Brevo 이메일
     brevo_api_key: str = ""
     brevo_sender_email: str = "noreply@ecosense.app"
+    reset_db_on_startup: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -46,4 +47,6 @@ def get_settings() -> Settings:
         raise RuntimeError("SECRET_KEY must be changed from the default before running in production.")
     if s.secret_key == _INSECURE_SECRET:
         logger.warning("⚠️  SECRET_KEY가 기본값입니다. 운영 전에 변경하세요.")
+    if s.cookie_secure is False and not s.debug:
+        logger.warning("⚠️  COOKIE_SECURE=False in production. HTTPS 환경에서는 true로 설정하세요.")
     return s
