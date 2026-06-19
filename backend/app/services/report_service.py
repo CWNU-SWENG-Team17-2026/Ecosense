@@ -38,30 +38,80 @@ from app.models.user import User
 from app.schemas.report import ReportHistoryItem, ReportPeriod
 
 import os
+from pathlib import Path
+
+_ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+_BUNDLED_FONT = _ASSETS_DIR / "NotoSansKR-Regular.otf"
+
+# OS별·배포 환경별 한글 폰트 후보 (앞에서부터 우선)
+_FONT_CANDIDATES: list[Path | str] = [
+    _BUNDLED_FONT,
+    os.environ.get("KOREAN_FONT_PATH", ""),
+    # Linux (Render/Docker 등)
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/google-noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    "/usr/share/fonts/nanum/NanumGothic.ttf",
+    # Windows (로컬 개발)
+    "C:/Windows/Fonts/malgun.ttf",
+    "C:/Windows/Fonts/NanumGothic.ttf",
+    # macOS
+    "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+    "/Library/Fonts/AppleGothic.ttf",
+]
+
+_mpl_font_props: fm.FontProperties | None = None
+
+
+def _resolve_korean_font_path() -> str | None:
+    for candidate in _FONT_CANDIDATES:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if path.is_file():
+            return str(path)
+    return None
 
 
 # ── 한글 폰트 등록 ──────────────────────────────────────────
-def _register_font():
+def _register_font() -> str:
+    font_path = _resolve_korean_font_path()
+    if font_path:
+        try:
+            pdfmetrics.registerFont(TTFont("Korean", font_path))
+            return "Korean"
+        except Exception:
+            pass
+
     try:
         pdfmetrics.registerFont(cidfonts.UnicodeCIDFont("HYGothic-Medium"))
         return "HYGothic-Medium"
     except Exception:
         pass
-    for path in ["C:/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/NanumGothic.ttf"]:
-        if os.path.exists(path):
-            try:
-                pdfmetrics.registerFont(TTFont("Korean", path))
-                return "Korean"
-            except Exception:
-                continue
+
     return "Helvetica"
 
 
-def _get_mpl_font():
-    for path in ["C:/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/NanumGothic.ttf"]:
-        if os.path.exists(path):
-            return fm.FontProperties(fname=path)
-    return fm.FontProperties()
+def _get_mpl_font() -> fm.FontProperties:
+    global _mpl_font_props
+    if _mpl_font_props is not None:
+        return _mpl_font_props
+
+    font_path = _resolve_korean_font_path()
+    if font_path:
+        try:
+            fm.fontManager.addfont(font_path)
+            _mpl_font_props = fm.FontProperties(fname=font_path)
+            family = _mpl_font_props.get_name()
+            plt.rcParams["font.family"] = family
+            plt.rcParams["axes.unicode_minus"] = False
+            return _mpl_font_props
+        except Exception:
+            pass
+
+    _mpl_font_props = fm.FontProperties()
+    return _mpl_font_props
 
 
 def _fig_to_bytes(fig) -> io.BytesIO:
