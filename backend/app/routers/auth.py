@@ -78,7 +78,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         )
 
     try:
-        create_user(db, payload)
+        _, email_sent = create_user(db, payload)
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -95,6 +95,16 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
                 "RESET_DB_ON_STARTUP=true 로 1회 재배포 후 false로 되돌리세요."
             ),
         ) from None
+
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "회원 정보는 저장되었으나 인증 메일 발송에 실패했습니다. "
+                "Render에 BREVO_API_KEY, BREVO_SENDER_EMAIL(verified sender)을 확인한 뒤 "
+                "인증코드 재발송을 시도해주세요."
+            ),
+        )
 
     return {"message": f"{payload.email}로 인증코드를 발송했습니다. 10분 이내에 인증해주세요."}
 
@@ -116,11 +126,19 @@ def verify(payload: VerifyEmailRequest, db: Session = Depends(get_db)):
 
 @router.post("/resend-verify")
 def resend_verify(payload: ResendVerifyRequest, db: Session = Depends(get_db)):
-    success = resend_verify_code(db, payload.email)
-    if not success:
+    user_ok, email_sent = resend_verify_code(db, payload.email)
+    if not user_ok:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="인증코드 재발송에 실패했습니다.",
+        )
+    if not email_sent:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "인증코드는 갱신되었으나 메일 발송에 실패했습니다. "
+                "BREVO_API_KEY와 BREVO_SENDER_EMAIL 설정을 확인해주세요."
+            ),
         )
     return {"message": "인증코드가 재발송되었습니다."}
 

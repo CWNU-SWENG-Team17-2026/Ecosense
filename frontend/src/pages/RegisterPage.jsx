@@ -34,8 +34,18 @@ export default function RegisterPage() {
     } catch (err) {
       const status = err?.response?.status;
       const detail = err?.response?.data?.detail;
-      if (status === 400) setError(typeof detail === 'string' ? detail : '이미 등록된 이메일입니다.');
-      else setError('회원가입에 실패했습니다. 다시 시도해주세요.');
+      if (status === 409) {
+        setError(typeof detail === 'string' ? detail : '이미 등록된 이메일입니다.');
+      } else if (status === 503) {
+        setStep('verify');
+        setError(
+          typeof detail === 'string'
+            ? detail
+            : '메일 발송에 실패했습니다. 아래에서 인증코드 재발송을 시도해주세요.'
+        );
+      } else {
+        setError('회원가입에 실패했습니다. 다시 시도해주세요.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -61,8 +71,11 @@ export default function RegisterPage() {
     try {
       await resendVerify(email);
       alert('인증코드가 재발송되었습니다.');
-    } catch {
-      setError('인증코드 재발송에 실패했습니다.');
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      setError(
+        typeof detail === 'string' ? detail : '인증코드 재발송에 실패했습니다.'
+      );
     }
   };
 

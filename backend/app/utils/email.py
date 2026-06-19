@@ -1,15 +1,29 @@
 # utils/email.py
+import logging
+
 import httpx
+
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
 def send_verification_email(to_email: str, code: str) -> bool:
-    """Brevo API로 이메일 인증코드 발송"""
+    """Brevo API로 이메일 인증코드 발송. 실패 시 False."""
     if not settings.brevo_api_key:
-        print(f"[개발모드] 인증코드: {code}")
-        return True
+        logger.warning(
+            "[개발모드] BREVO_API_KEY 없음 — 이메일 미발송. 인증코드=%s → %s",
+            code,
+            to_email,
+        )
+        return False
+
+    if not settings.brevo_sender_email or settings.brevo_sender_email == "noreply@ecosense.app":
+        logger.warning(
+            "BREVO_SENDER_EMAIL이 기본값이거나 비어 있음 (%s). Brevo에서 verified sender로 설정하세요.",
+            settings.brevo_sender_email,
+        )
 
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {
@@ -38,8 +52,17 @@ def send_verification_email(to_email: str, code: str) -> bool:
     }
 
     try:
-        response = httpx.post(url, json=payload, headers=headers, timeout=10)
-        return response.status_code in (200, 201)
-    except Exception as e:
-        print(f"이메일 발송 오류: {e}")
+        response = httpx.post(url, json=payload, headers=headers, timeout=15.0)
+        if response.status_code in (200, 201):
+            logger.info("인증 메일 발송 성공 → %s", to_email)
+            return True
+        logger.error(
+            "Brevo 발송 실패 status=%s body=%s sender=%s",
+            response.status_code,
+            response.text[:500],
+            settings.brevo_sender_email,
+        )
+        return False
+    except Exception as exc:
+        logger.exception("Brevo API 호출 오류 → %s: %s", to_email, exc)
         return False

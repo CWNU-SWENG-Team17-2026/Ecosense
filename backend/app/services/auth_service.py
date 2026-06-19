@@ -19,7 +19,7 @@ def _generate_code(length: int = 6) -> str:
     return "".join(random.choices(string.digits, k=length))
 
 
-def create_user(db: Session, payload: RegisterRequest) -> User:
+def create_user(db: Session, payload: RegisterRequest) -> tuple[User, bool]:
     code = _generate_code()
     expires = datetime.now(timezone.utc) + timedelta(minutes=10)
 
@@ -36,8 +36,8 @@ def create_user(db: Session, payload: RegisterRequest) -> User:
     db.commit()
     db.refresh(user)
 
-    send_verification_email(payload.email, code)
-    return user
+    email_sent = send_verification_email(payload.email, code)
+    return user, email_sent
 
 
 def verify_email(db: Session, email: str, code: str) -> bool:
@@ -62,18 +62,19 @@ def verify_email(db: Session, email: str, code: str) -> bool:
     return True
 
 
-def resend_verify_code(db: Session, email: str) -> bool:
+def resend_verify_code(db: Session, email: str) -> tuple[bool, bool]:
+    """(user_exists, email_sent)"""
     user = get_user_by_email(db, email)
     if not user or user.is_verified:
-        return False
+        return False, False
 
     code = _generate_code()
     user.verify_code = code
     user.verify_code_expires = datetime.now(timezone.utc) + timedelta(minutes=10)
     db.commit()
 
-    send_verification_email(email, code)
-    return True
+    email_sent = send_verification_email(email, code)
+    return True, email_sent
 
 
 def authenticate_user(db: Session, email: str, password: str) -> User | None:
