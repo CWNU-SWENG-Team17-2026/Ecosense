@@ -148,7 +148,7 @@ export const useBluetooth = () => {
     try {
       // 1. 기기 선택 (필터: 서비스 UUID)
       const device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: [SERVICE_UUID] }],
+        acceptAllDevices: true,
         optionalServices: [SERVICE_UUID],
       });
 
