@@ -18,30 +18,38 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
 
 
+def _cookie_kwargs() -> dict:
+    samesite = settings.cookie_samesite.lower()
+    if samesite not in ("lax", "strict", "none"):
+        samesite = "lax"
+    return {
+        "httponly": True,
+        "secure": settings.cookie_secure,
+        "samesite": samesite,
+        "path": "/",
+    }
+
+
 def _set_auth_cookies(response: Response, user: User) -> None:
+    cookie_opts = _cookie_kwargs()
     response.set_cookie(
         key="access_token",
         value=create_access_token(user.id, user.email),
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
         max_age=settings.access_token_expire_minutes * 60,
-        path="/",
+        **cookie_opts,
     )
     response.set_cookie(
         key="refresh_token",
         value=create_refresh_token(user.id, user.email),
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite=settings.cookie_samesite,
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
-        path="/",
+        **cookie_opts,
     )
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/")
+    cookie_opts = _cookie_kwargs()
+    response.delete_cookie(key="access_token", **cookie_opts)
+    response.delete_cookie(key="refresh_token", **cookie_opts)
 
 
 @router.post("/register", response_model=UserResponse)
