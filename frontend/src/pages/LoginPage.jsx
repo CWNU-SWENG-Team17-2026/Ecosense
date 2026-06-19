@@ -33,9 +33,15 @@ export default function LoginPage() {
         }
       }
     } catch (err) {
-      const status = err?.response?.status;
-      if (status === 401) setError('이메일 또는 비밀번호가 올바르지 않습니다.');
-      else setError('로그인에 실패했습니다. 다시 시도해주세요.');
+      const statusCode = err?.response?.status;
+      if (statusCode === 401) {
+        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+      } else if (statusCode === 403) {
+        // 이메일 인증 미완료 — 인증 화면으로 이동
+        navigate('/register', { state: { email, gotoVerify: true } });
+      } else {
+        setError('로그인에 실패했습니다. 다시 시도해주세요.');
+      }
     } finally {
       setIsLoading(false);
     }

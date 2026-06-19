@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { register, verifyEmail, resendVerify } from '../services/auth';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [step, setStep] = useState('form'); // 'form' | 'verify'
-  const [email, setEmail] = useState('');
+  // 로그인 페이지에서 미인증 403으로 넘어올 때 이메일·단계 인계
+  const initEmail = location.state?.email || '';
+  const initStep = location.state?.gotoVerify ? 'verify' : 'form';
+
+  const [step, setStep] = useState(initStep);
+  const [email, setEmail] = useState(initEmail);
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [name, setName] = useState('');

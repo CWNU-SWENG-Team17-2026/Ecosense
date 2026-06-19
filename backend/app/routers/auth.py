@@ -14,7 +14,7 @@ from app.schemas.auth import (
     UserResponse, VerifyEmailRequest,
 )
 from app.services.auth_service import (
-    authenticate_user, create_user, get_user_by_email,
+    authenticate_user, register_or_resend, get_user_by_email,
     verify_email, resend_verify_code,
 )
 from app.utils.jwt_utils import (
@@ -66,19 +66,18 @@ def _clear_auth_cookies(response: Response) -> None:
 @router.post("/register")
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     """
-    회원가입 요청
-    - DB에 저장하지 않고 인증코드만 발송
-    - 이미 가입된 이메일이면 409 반환
+    회원가입 요청.
+    - 신규: 계정 생성 + 인증 메일 발송
+    - 미인증 기존 계정: 정보 갱신 + 새 인증 코드 발송 (인증 완료 전 재시도 허용)
+    - 인증 완료 계정: 409
     """
-    # 이미 가입된 이메일 확인
-    if get_user_by_email(db, payload.email):
+    try:
+        _, email_sent, _ = register_or_resend(db, payload)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="이미 가입된 이메일입니다. 로그인 페이지에서 로그인해주세요.",
-        )
-
-    try:
-        _, email_sent = create_user(db, payload)
+        ) from None
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -101,7 +100,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
                 "회원 정보는 저장되었으나 인증 메일 발송에 실패했습니다. "
-                "Render에 BREVO_API_KEY, BREVO_SENDER_EMAIL(verified sender)을 확인한 뒤 "
+                "BREVO_API_KEY, BREVO_SENDER_EMAIL(verified sender)을 확인한 뒤 "
                 "인증코드 재발송을 시도해주세요."
             ),
         )
@@ -150,6 +149,11 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="이메일 또는 비밀번호가 올바르지 않습니다.",
+        )
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="이메일 인증이 완료되지 않은 계정입니다. 회원가입 화면에서 인증을 완료해주세요.",
         )
     _set_auth_cookies(response, user)
     return UserResponse(
