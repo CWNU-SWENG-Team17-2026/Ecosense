@@ -1,0 +1,232 @@
+EcoSense Database Schema (v1.2 — 2026-06, PostgreSQL / Render 기준)
+
+정본 소스:
+  - backend/app/models/*.py        (SQLAlchemy ORM)
+  - backend/app/utils/schema.py    (user_preferences, user_feedback raw DDL)
+  - backend/app/database.py        init_db() → create_all + create_survey_tables()
+
+DB: PostgreSQL (Render). 로컬 개발 시 sqlite:// 가능.
+오디오 Blob은 서버에 저장하지 않음 → 클라이언트 IndexedDB 전용.
+실내 BLE 측정값은 서버 테이블 없음 (프론트 useSensorStore + 선택적 sync 메타).
+
+────────────────────────────────────────
+테이블 목록 (7)
+────────────────────────────────────────
+
+| 테이블 | ORM / DDL | 설명 |
+|--------|-----------|------|
+| users | User | 회원 + 이메일 인증 |
+| measurement_sessions | MeasurementSession | OUTDOOR/INDOOR/SLEEP 통합 세션 |
+| spikes | Spike | 스파이크 메타 (Blob 없음) |
+| outdoor_data_cache | OutdoorDataCache | KMA+에어코리아 API 응답 캐시 |
+| report_histories | ReportHistory | PDF 리포트 생성 이력 |
+| user_preferences | raw SQL | 설문 Q1~Q14e |
+| user_feedback | raw SQL | 설문 Q15 |
+
+────────────────────────────────────────
+컬럼 상세
+────────────────────────────────────────
+
+[users]
+  id                  SERIAL PK
+  email               VARCHAR(255) UNIQUE NOT NULL
+  password_hash       VARCHAR(255) NOT NULL
+  name                VARCHAR(100) NULL
+  phone               VARCHAR(20) NULL
+  is_verified         BOOLEAN NOT NULL DEFAULT false
+  verify_code         VARCHAR(10) NULL
+  verify_code_expires TIMESTAMPTZ NULL
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+  last_login          TIMESTAMPTZ NULL
+
+[measurement_sessions]
+  id          VARCHAR(36) PK          -- 클라이언트 UUID
+  user_id     INTEGER FK → users.id ON DELETE CASCADE
+  type        VARCHAR(20) NOT NULL    -- OUTDOOR | INDOOR | SLEEP
+  started_at  TIMESTAMPTZ NOT NULL
+  ended_at    TIMESTAMPTZ NULL
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+
+[spikes]
+  id            VARCHAR(36) PK
+  session_id    VARCHAR(36) FK → measurement_sessions.id ON DELETE CASCADE
+  user_id       INTEGER FK → users.id ON DELETE CASCADE
+  detected_at   TIMESTAMPTZ NOT NULL
+  db_level      FLOAT NOT NULL
+  duration_sec  INTEGER NOT NULL
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+
+[outdoor_data_cache]
+  id                   SERIAL PK
+  location             VARCHAR(255) NOT NULL  -- 지역명 또는 "lat,lon"
+  temperature          FLOAT NOT NULL
+  humidity             FLOAT NOT NULL
+  rainfall             FLOAT DEFAULT 0
+  aqi                  FLOAT NOT NULL
+  aqi_grade            VARCHAR(20) NOT NULL   -- good|moderate|bad|very_bad
+  pm25                 FLOAT NOT NULL
+  pm10                 FLOAT NULL
+  uv_index             FLOAT NULL
+  weather_description  VARCHAR(100) NOT NULL
+  cached_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+  ※ user_id 없음 — location 키 기준 공용 캐시, TTL은 outdoor_service에서 cached_at 기준
+
+[report_histories]
+  id            VARCHAR(36) PK
+  user_id       INTEGER FK → users.id ON DELETE CASCADE
+  period        VARCHAR(20) NOT NULL       -- weekly | monthly
+  summary_text  TEXT NULL
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+
+[user_preferences]  (user당 1행, UNIQUE user_id)
+  id, user_id FK → users.id ON DELETE CASCADE
+  q1_age … q14e_sleep_feature  (TEXT, nullable)
+  ※ 전체 컬럼: backend/app/utils/schema.py 참고
+
+[user_feedback]  (user당 1행, UNIQUE user_id)
+  id SERIAL PK
+  user_id INTEGER NOT NULL UNIQUE FK → users.id ON DELETE CASCADE
+  q15_opinion TEXT
+
+────────────────────────────────────────
+관계 (FK)
+────────────────────────────────────────
+
+users 1 ── * measurement_sessions
+users 1 ── * spikes
+users 1 ── * report_histories
+users 1 ── 1 user_preferences
+users 1 ── 1 user_feedback
+measurement_sessions 1 ── * spikes
+
+Cascade: User 삭제 시 sessions, spikes, reports, survey 행 함께 삭제.
+
+────────────────────────────────────────
+데이터 정책
+────────────────────────────────────────
+
+- spikes / measurement_sessions / report_histories: 30일 경과 삭제
+  → cleanup.py (앱 시작) + POST /api/sessions/cleanup
+- outdoor_data_cache: TTL 만료 시 재조회 (OUTDOOR_CACHE_TTL_MINUTES, 기본 10분)
+- 스파이크 오디오: IndexedDB spikes.blob (expires_at, 30일)
+
+────────────────────────────────────────
+PlantUML ER Diagram
+────────────────────────────────────────
+
+@startuml
+title **EcoSense Database Schema (PostgreSQL v1.2)**
+
+skinparam class {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  ArrowColor #1565C0
+}
+
+entity "users" as users {
+  * id : SERIAL <<PK>>
+  --
+  * email : VARCHAR(255) <<UNIQUE>>
+  * password_hash : VARCHAR(255)
+  name : VARCHAR(100)
+  phone : VARCHAR(20)
+  * is_verified : BOOLEAN
+  verify_code : VARCHAR(10)
+  verify_code_expires : TIMESTAMPTZ
+  * created_at : TIMESTAMPTZ
+  last_login : TIMESTAMPTZ
+}
+
+entity "measurement_sessions" as sessions {
+  * id : VARCHAR(36) <<PK>>
+  --
+  * user_id : INTEGER <<FK>>
+  * type : VARCHAR(20)
+  * started_at : TIMESTAMPTZ
+  ended_at : TIMESTAMPTZ
+  * created_at : TIMESTAMPTZ
+}
+
+entity "spikes" as spikes {
+  * id : VARCHAR(36) <<PK>>
+  --
+  * session_id : VARCHAR(36) <<FK>>
+  * user_id : INTEGER <<FK>>
+  * detected_at : TIMESTAMPTZ
+  * db_level : FLOAT
+  * duration_sec : INTEGER
+  * created_at : TIMESTAMPTZ
+}
+
+entity "outdoor_data_cache" as outdoor {
+  * id : SERIAL <<PK>>
+  --
+  * location : VARCHAR(255)
+  * temperature : FLOAT
+  * humidity : FLOAT
+  rainfall : FLOAT
+  * aqi : FLOAT
+  * aqi_grade : VARCHAR(20)
+  * pm25 : FLOAT
+  pm10 : FLOAT
+  uv_index : FLOAT
+  * weather_description : VARCHAR(100)
+  * cached_at : TIMESTAMPTZ
+}
+
+entity "report_histories" as reports {
+  * id : VARCHAR(36) <<PK>>
+  --
+  * user_id : INTEGER <<FK>>
+  * period : VARCHAR(20)
+  summary_text : TEXT
+  * created_at : TIMESTAMPTZ
+}
+
+entity "user_preferences" as prefs {
+  * id : SERIAL <<PK>>
+  --
+  * user_id : INTEGER <<FK>> <<UNIQUE>>
+  .. q1_age ~ q14e_sleep_feature ..
+  (설문 TEXT 컬럼 다수)
+}
+
+entity "user_feedback" as feedback {
+  * id : SERIAL <<PK>>
+  --
+  * user_id : INTEGER <<FK>> <<UNIQUE>>
+  q15_opinion : TEXT
+}
+
+users ||--o{ sessions : owns
+users ||--o{ spikes : owns
+users ||--o{ reports : owns
+users ||--o| prefs : fills
+users ||--o| feedback : fills
+sessions ||--o{ spikes : contains
+
+note right of outdoor
+  KMA + AirKorea API 캐시
+  location 기준, user 무관
+  TTL ~10분 (서비스 레이어)
+end note
+
+note bottom of spikes
+  오디오 Blob은 IndexedDB
+  서버에는 메타만 저장
+end note
+
+note bottom of sessions
+  type: OUTDOOR | INDOOR | SLEEP
+  id = 클라이언트 crypto.randomUUID()
+end note
+
+@enduml
+
+────────────────────────────────────────
+v1.0 db_schema.txt 대비 제거된 테이블
+────────────────────────────────────────
+
+- IndoorData, NoiseData, SleepSession, NoiseSpike
+  → measurement_sessions + spikes 로 통합
+  → 실내 센서 원시값은 서버 미저장
