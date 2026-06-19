@@ -17,6 +17,9 @@ class OutdoorResponse(BaseModel):
     pm10: float | None = None
     uv_index: float | None = None
     weather_description: str
+    weather_source: str | None = None
+    weather_station: str | None = None
+    weather_observed_at: datetime | None = None
     cached: bool
     is_mock: bool = False
     last_updated: datetime

@@ -30,15 +30,26 @@ const normalizeOutdoorData = (raw: Record<string, unknown>): OutdoorData => {
     weather_description: String(
       raw.weather_description ?? raw.weather ?? '정보 없음'
     ),
+    weather_source: raw.weather_source ? String(raw.weather_source) : null,
+    weather_station: raw.weather_station ? String(raw.weather_station) : null,
+    weather_observed_at: raw.weather_observed_at
+      ? String(raw.weather_observed_at)
+      : null,
     cached: Boolean(raw.cached ?? false),
     is_mock: Boolean(raw.is_mock ?? false),
     last_updated: String(raw.last_updated ?? new Date().toISOString()),
   };
 };
 
-export const getOutdoorData = async (location: string): Promise<OutdoorData> => {
+export const getOutdoorData = async (
+  location: string,
+  options?: { forceRefresh?: boolean },
+): Promise<OutdoorData> => {
   const response = await api.get('/outdoor', {
-    params: { location },
+    params: {
+      location,
+      force_refresh: options?.forceRefresh ?? false,
+    },
   });
 
   return normalizeOutdoorData(response.data);

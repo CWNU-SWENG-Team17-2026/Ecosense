@@ -53,6 +53,9 @@ export interface OutdoorData {
   pm10?: number;
   uv_index?: number;
   weather_description: string;
+  weather_source?: string | null;
+  weather_station?: string | null;
+  weather_observed_at?: string | null;
   cached: boolean;
   is_mock?: boolean;
   last_updated: string;    // ISO 8601

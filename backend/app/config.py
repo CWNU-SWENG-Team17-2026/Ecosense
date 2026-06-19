@@ -25,8 +25,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
 
     kma_api_key: str = ""
+    kma_forecast_service_key: str = ""
     airkorea_api_key: str = ""
-    outdoor_cache_ttl_minutes: int = 30
+    outdoor_cache_ttl_minutes: int = 10
 
     cookie_secure: bool = False
     cookie_samesite: str = "lax"

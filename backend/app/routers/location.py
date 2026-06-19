@@ -1,31 +1,58 @@
 from fastapi import APIRouter, Query
 
+from app.utils.geocoding import search_places
+from app.utils.kma_asos_station import ASOS_STATIONS
+from app.utils.kma_grid import _LOCATION_COORDS
+
 router = APIRouter(prefix="/location", tags=["location"])
 
-_LOCATIONS = [
-    "경남 창원시 의창구",
-    "경남 창원시 성산구",
-    "경남 창원시 마산합포구",
-    "경남 창원시 마산회원구",
-    "경남 창원시 진해구",
-    "서울특별시 종로구",
-    "서울특별시 강남구",
-    "부산광역시 해운대구",
-    "대구광역시 수성구",
-    "인천광역시 연수구",
-]
+
+def _local_matches(keyword: str) -> list[dict[str, str | float]]:
+    normalized = keyword.strip().lower()
+    if not normalized:
+        return []
+
+    seen: set[str] = set()
+    results: list[dict[str, str | float]] = []
+
+    for name, (lat, lon) in _LOCATION_COORDS.items():
+        if normalized in name.lower() and name not in seen:
+            seen.add(name)
+            results.append({"name": name, "lat": lat, "lon": lon})
+
+    for station in ASOS_STATIONS:
+        if normalized in station.name.lower() and station.name not in seen:
+            seen.add(station.name)
+            results.append(
+                {"name": station.name, "lat": station.lat, "lon": station.lon}
+            )
+
+    return results
 
 
 @router.get("/search")
-def search_locations(keyword: str = Query(min_length=1)):
-    normalized = keyword.strip().lower()
-    results = [
-        {"name": name}
-        for name in _LOCATIONS
-        if normalized in name.lower()
-    ]
+async def search_locations(keyword: str = Query(min_length=1)):
+    """전국 지역 검색 — OpenStreetMap 지오코딩 + 로컬 관측소/행정구역."""
+    local = _local_matches(keyword)
+    remote = await search_places(keyword, limit=8)
 
-    if not results and normalized:
-        results = [{"name": keyword.strip()}]
+    seen: set[str] = set()
+    merged: list[dict[str, str | float]] = []
 
-    return results[:10]
+    for item in local:
+        name = str(item["name"])
+        if name not in seen:
+            seen.add(name)
+            merged.append(item)
+
+    for place in remote:
+        if place.name not in seen:
+            seen.add(place.name)
+            merged.append(
+                {"name": place.name, "lat": place.lat, "lon": place.lon}
+            )
+
+    if not merged:
+        merged = [{"name": keyword.strip()}]
+
+    return merged[:10]

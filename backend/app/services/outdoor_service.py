@@ -18,8 +18,9 @@ from app.config import get_settings
 from app.models.outdoor import OutdoorDataCache
 from app.schemas.outdoor import AqiGrade, OutdoorResponse
 from app.utils.datetime_utils import ensure_utc
-from app.utils.kma_grid import get_coords, get_station, latlon_to_grid
-from app.utils.weather_api import fetch_airkorea, fetch_kma_forecast
+from app.utils.airkorea_station import resolve_station_name
+from app.utils.kma_grid import resolve_location_async
+from app.utils.weather_api import fetch_airkorea, fetch_kma_weather
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -88,20 +89,41 @@ def _build_mock_outdoor(location: str) -> OutdoorResponse:
 
 # ─── API 실데이터 페치 ──────────────────────────────────────────────
 
+async def _skip_air_fetch() -> None:
+    return None
+
+
 async def _fetch_live_outdoor(location: str) -> OutdoorResponse | None:
-    """KMA + 에어코리아 실데이터 조합. 실패 시 None 반환."""
-    coords = get_coords(location)
-    if coords is None:
+    """기상청 + 에어코리아 실데이터 조합. 실패 시 None 반환."""
+    place = await resolve_location_async(location)
+    if place is None:
         logger.info("위치 좌표 매핑 없음: %s → mock 사용", location)
         return None
 
-    lat, lon = coords
-    nx, ny = latlon_to_grid(lat, lon)
-    station = get_station(location)
+    lat, lon = place.lat, place.lon
+    display_name = place.name
+    air_station = await resolve_station_name(settings.airkorea_api_key, lat, lon)
+    if settings.airkorea_api_key and not air_station:
+        logger.warning("에어코리아 측정소 조회 실패: %s (%.4f, %.4f)", location, lat, lon)
 
+    air_task = (
+        fetch_airkorea(settings.airkorea_api_key, air_station)
+        if air_station
+        else _skip_air_fetch()
+    )
+    kma_task = (
+        fetch_kma_weather(
+            settings.kma_api_key,
+            lat,
+            lon,
+            forecast_service_key=settings.kma_forecast_service_key,
+        )
+        if settings.kma_api_key or settings.kma_forecast_service_key
+        else _skip_air_fetch()
+    )
     kma_data, air_data = await asyncio.gather(
-        fetch_kma_forecast(settings.kma_api_key, nx, ny),
-        fetch_airkorea(settings.airkorea_api_key, station),
+        kma_task,
+        air_task,
         return_exceptions=True,
     )
 
@@ -117,19 +139,27 @@ async def _fetch_live_outdoor(location: str) -> OutdoorResponse | None:
     now = datetime.now(timezone.utc)
     hour = now.astimezone().hour
 
-    temp = float(kma_data["temperature"]) if kma_data else 20.0
-    humidity = float(kma_data["humidity"]) if kma_data else 50.0
-    rainfall = float(kma_data["rainfall"]) if kma_data else 0.0
-    weather_desc = kma_data["weather_description"] if kma_data else "정보 없음"
+    has_weather = kma_data is not None
+    has_air = air_data is not None
 
-    pm25 = float(air_data["pm25"]) if air_data else 15.0
-    pm10 = float(air_data["pm10"]) if air_data else None
-    aqi = float(air_data["aqi"]) if air_data else round(pm25 * 2.2, 1)
+    temp = float(kma_data["temperature"]) if has_weather else 20.0
+    humidity = float(kma_data["humidity"]) if has_weather else 50.0
+    rainfall = float(kma_data["rainfall"]) if has_weather else 0.0
+    weather_desc = (
+        kma_data["weather_description"] if has_weather else "정보 없음"
+    )
+    weather_source = kma_data.get("weather_source") if has_weather else None
+    weather_station = kma_data.get("weather_station") if has_weather else None
+    weather_observed_at = kma_data.get("weather_observed_at") if has_weather else None
+
+    pm25 = float(air_data["pm25"]) if has_air else 15.0
+    pm10 = float(air_data["pm10"]) if has_air else None
+    aqi = float(air_data["aqi"]) if has_air else round(pm25 * 2.2, 1)
     aqi_grade = _pm25_to_grade(pm25)
     uv = _uv_estimate(hour, weather_desc)
 
     return OutdoorResponse(
-        location=location,
+        location=display_name,
         temperature=temp,
         humidity=humidity,
         rainfall=rainfall,
@@ -139,6 +169,9 @@ async def _fetch_live_outdoor(location: str) -> OutdoorResponse | None:
         pm10=pm10,
         uv_index=uv,
         weather_description=weather_desc,
+        weather_source=weather_source,
+        weather_station=weather_station,
+        weather_observed_at=weather_observed_at,
         cached=False,
         is_mock=False,
         last_updated=now,
@@ -146,6 +179,27 @@ async def _fetch_live_outdoor(location: str) -> OutdoorResponse | None:
 
 
 # ─── 캐시 헬퍼 ──────────────────────────────────────────────────────
+
+def _cache_has_weather(cache: OutdoorDataCache) -> bool:
+    return cache.weather_description != "정보 없음"
+
+
+def _is_fresh_cache(cache: OutdoorDataCache, now: datetime, ttl: timedelta) -> bool:
+    """TTL 내 캐시이면서, API 키가 있을 때 해당 소스 데이터가 포함된 경우만 유효."""
+    cached_at = ensure_utc(cache.cached_at)
+    if cached_at is None or cached_at < now - ttl:
+        return False
+    if (settings.kma_api_key or settings.kma_forecast_service_key) and not _cache_has_weather(cache):
+        return False
+    return True
+
+
+def _should_persist_cache(data: OutdoorResponse) -> bool:
+    """기상/대기질 중 한쪽만 실패한 불완전 응답은 캐시하지 않는다."""
+    if (settings.kma_api_key or settings.kma_forecast_service_key) and data.weather_description == "정보 없음":
+        return False
+    return True
+
 
 def _cache_to_response(cache: OutdoorDataCache, cached: bool) -> OutdoorResponse:
     return OutdoorResponse(
@@ -205,59 +259,59 @@ def get_outdoor_history(
 
 # ─── 메인 진입점 ─────────────────────────────────────────────────────
 
-def get_outdoor_data(db: Session, location: str) -> OutdoorResponse:
+def _run_async(coro):
+    try:
+        import asyncio as _asyncio
+        return _asyncio.run(coro)
+    except RuntimeError:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(lambda: asyncio.run(coro))
+            return future.result(timeout=20)
+
+
+def get_outdoor_data(
+    db: Session, location: str, force_refresh: bool = False
+) -> OutdoorResponse:
     """
     캐시 확인 → 실 API 호출(키 있을 때) → mock 폴백 순서로 데이터 반환.
     NFR-R-001: 호출 실패 시 최근 캐시 반환 + cached=True 표시.
+
+    GPS 좌표("35.22,128.68") 입력 시 가장 가까운 사전 지역명으로 정규화하여
+    캐시 키를 통일하고 표시 지역명을 사람이 읽을 수 있게 변환한다.
     """
     normalized = location.strip() or "경남 창원시 의창구"
     ttl = timedelta(minutes=settings.outdoor_cache_ttl_minutes)
     now = datetime.now(timezone.utc)
 
-    # 1. 캐시 확인
+    place = _run_async(resolve_location_async(normalized))
+    cache_key = place.name if place else normalized
+    fetch_input = f"{place.lat},{place.lon}" if place else normalized
+
     cache = (
         db.query(OutdoorDataCache)
-        .filter(OutdoorDataCache.location == normalized)
+        .filter(OutdoorDataCache.location == cache_key)
         .order_by(OutdoorDataCache.cached_at.desc())
         .first()
     )
-    cached_at = ensure_utc(cache.cached_at) if cache else None
-    if cache and cached_at and cached_at >= now - ttl:
+    if not force_refresh and cache and _is_fresh_cache(cache, now, ttl):
         return _cache_to_response(cache, cached=True)
 
-    # 2. 실 API 호출
     live: OutdoorResponse | None = None
-    if settings.kma_api_key or settings.airkorea_api_key:
+    if settings.kma_api_key or settings.kma_forecast_service_key or settings.airkorea_api_key:
         try:
-            import asyncio as _asyncio
-            live = _asyncio.run(_fetch_live_outdoor(normalized))
-        except RuntimeError:
-            # FastAPI async 컨텍스트에서 호출될 때 (이미 이벤트 루프 있음)
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(
-                    lambda: asyncio.run(_fetch_live_outdoor(normalized))  # type: ignore[arg-type]
-                )
-                try:
-                    live = future.result(timeout=15)
-                except Exception as exc:
-                    logger.warning("실 API 스레드 호출 실패: %s", exc)
-                    live = None
+            live = _run_async(_fetch_live_outdoor(fetch_input))
         except Exception as exc:
             logger.warning("실 API 호출 실패: %s", exc)
             live = None
 
     if live is not None:
-        _save_cache(db, normalized, live)
-        return live
+        if _should_persist_cache(live):
+            _save_cache(db, cache_key, live)
+        return live.model_copy(update={"location": cache_key})
 
-    # 3. Mock 폴백
-    # NFR-R-001: 실패 시 최근 캐시 우선 반환
     if cache:
-        logger.info("API 실패/키 없음 → 만료 캐시 반환: %s", normalized)
+        logger.info("API 실패/키 없음 → 만료 캐시 반환: %s", cache_key)
         return _cache_to_response(cache, cached=True)
 
-    # 최초 진입 + 키 없음 → mock
-    outdoor = _build_mock_outdoor(normalized)
-    _save_cache(db, normalized, outdoor)
-    return outdoor
+    return _build_mock_outdoor(cache_key)

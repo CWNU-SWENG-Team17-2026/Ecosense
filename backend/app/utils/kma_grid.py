@@ -6,6 +6,12 @@ Lambert Conformal Conic 투영 (기상청 표준)
 """
 import math
 
+from app.utils.geocoding import GeoPlace, geocode_place_name, reverse_geocode
+from app.utils.kma_asos_station import (
+    find_asos_coords_by_name,
+    resolve_display_name_from_coords,
+)
+
 # 기상청 격자 변환 상수 (기상청 공식 문서 기준)
 _RE = 6371.00877       # 지구 반경 (km)
 _GRID = 5.0            # 격자 간격 (km)
@@ -71,29 +77,6 @@ _LOCATION_COORDS: dict[str, tuple[float, float]] = {
     "창원": (35.2280, 128.6820),
 }
 
-# 에어코리아 측정소 매핑 (지역명 → 측정소 이름)
-_STATION_MAP: dict[str, str] = {
-    "경남 창원시 의창구": "창원",
-    "경남 창원시 성산구": "창원",
-    "경남 창원시 마산합포구": "마산",
-    "경남 창원시 마산회원구": "마산",
-    "경남 창원시 진해구": "창원",
-    "서울특별시 종로구": "종로구",
-    "서울특별시 강남구": "강남구",
-    "부산광역시 해운대구": "해운대구",
-    "대구광역시 수성구": "수성구",
-    "인천광역시 연수구": "연수구",
-    "서울": "종로구",
-    "부산": "해운대구",
-    "대구": "수성구",
-    "인천": "연수구",
-    "광주": "서구",
-    "대전": "서구",
-    "울산": "중구",
-    "창원": "창원",
-}
-
-
 def _parse_latlon(location: str) -> tuple[float, float] | None:
     try:
         parts = location.split(",")
@@ -121,26 +104,84 @@ def _nearest_location_name(location: str) -> str | None:
 
 
 def get_coords(location: str) -> tuple[float, float] | None:
-    """지역명으로 위경도 반환. 없으면 None."""
-    # 정확히 일치
+    """지역명/좌표 문자열 → 위경도. 전국 ASOS 지점명도 지원."""
     if location in _LOCATION_COORDS:
         return _LOCATION_COORDS[location]
-    # 부분 일치 (앞부분)
     for key, coords in _LOCATION_COORDS.items():
         if key in location or location in key:
             return coords
-    # 위경도 문자열 직접 입력 ("37.5,126.9" 형태)
-    return _parse_latlon(location)
+
+    parsed = _parse_latlon(location)
+    if parsed is not None:
+        return parsed
+
+    return find_asos_coords_by_name(location)
 
 
-def get_station(location: str) -> str:
-    """지역명으로 에어코리아 측정소 이름 반환."""
-    if location in _STATION_MAP:
-        return _STATION_MAP[location]
-    for key, station in _STATION_MAP.items():
-        if key in location or location in key:
-            return station
-    nearest = _nearest_location_name(location)
-    if nearest and nearest in _STATION_MAP:
-        return _STATION_MAP[nearest]
-    return "종로구"  # 기본값
+def resolve_display_location(location: str) -> str:
+    """사용자 입력 location을 표시용 지역명으로 정규화.
+
+    - 위경도 문자열("35.22,128.68") → 가장 가까운 사전 지역명
+    - 사전에 없는 한글 지명 → 그대로 반환
+    - 사전에 있는 지명 → 정확한 사전 키 반환
+    """
+    stripped = location.strip()
+
+    # 정확히 일치하는 사전 키가 있으면 그대로
+    if stripped in _LOCATION_COORDS:
+        return stripped
+
+    # 위경도 문자열이면 최근접 지역명으로 변환
+    coords = _parse_latlon(stripped)
+    if coords is not None:
+        lat, lon = coords
+        return resolve_display_name_from_coords(lat, lon)
+
+    asos_coords = find_asos_coords_by_name(stripped)
+    if asos_coords is not None:
+        return resolve_display_name_from_coords(*asos_coords)
+
+    # 부분 일치하는 사전 키 반환
+    for key in _LOCATION_COORDS:
+        if key in stripped or stripped in key:
+            return key
+
+    return stripped
+
+
+async def resolve_location_async(location: str) -> GeoPlace | None:
+    """지역명/GPS → 표시명 + 좌표 (지오코딩 우선)."""
+    stripped = location.strip()
+    if not stripped:
+        return None
+
+    parsed = _parse_latlon(stripped)
+    if parsed is not None:
+        lat, lon = parsed
+        place = await reverse_geocode(lat, lon)
+        if place:
+            return place
+        return GeoPlace(
+            name=resolve_display_name_from_coords(lat, lon),
+            lat=lat,
+            lon=lon,
+        )
+
+    if stripped in _LOCATION_COORDS:
+        lat, lon = _LOCATION_COORDS[stripped]
+        return GeoPlace(name=stripped, lat=lat, lon=lon)
+
+    for key, coords in _LOCATION_COORDS.items():
+        if key in stripped or stripped in key:
+            return GeoPlace(name=key, lat=coords[0], lon=coords[1])
+
+    asos_coords = find_asos_coords_by_name(stripped)
+    if asos_coords is not None:
+        lat, lon = asos_coords
+        return GeoPlace(
+            name=resolve_display_name_from_coords(lat, lon),
+            lat=lat,
+            lon=lon,
+        )
+
+    return await geocode_place_name(stripped)

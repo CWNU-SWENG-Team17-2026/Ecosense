@@ -29,6 +29,12 @@ const gradeToKorean = {
   very_bad: '매우 나쁨',
 };
 
+const weatherSourceLabels = {
+  ultra_ncst: '기상청 초단기실황 (10분 갱신)',
+  asos_hourly: '기상청 ASOS 시간관측 (매시 정시)',
+  vilage_fcst: '기상청 단기예보',
+};
+
 export default function OutdoorPage() {
   const {
     data,
@@ -46,12 +52,15 @@ export default function OutdoorPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [isGpsLoading, setIsGpsLoading] = useState(false);
 
-  const loadOutdoorData = async (locationName) => {
+  const loadOutdoorData = async (locationName, { forceRefresh = false } = {}) => {
     setLoading(true);
     setError(null);
     try {
-      const outdoorData = await getOutdoorData(locationName);
-      setLocation(locationName);
+      const outdoorData = await getOutdoorData(locationName, { forceRefresh });
+      // 서버가 GPS 좌표를 가장 가까운 지역명으로 정규화해서 돌려주므로
+      // inputLocation과 store location 모두 서버 응답값으로 갱신한다
+      setLocation(outdoorData.location);
+      setInputLocation(outdoorData.location);
       setOutdoorData(outdoorData);
     } catch (err) {
       console.error('실외 데이터 조회 실패:', err);
@@ -71,7 +80,7 @@ export default function OutdoorPage() {
   }, []);
 
   const handleRefresh = async () => {
-    await loadOutdoorData(inputLocation);
+    await loadOutdoorData(inputLocation, { forceRefresh: true });
   };
 
   const handleSearchLocation = async () => {
@@ -93,10 +102,13 @@ export default function OutdoorPage() {
   };
 
   const handleSelectLocation = async (selectedLocation) => {
-    const locationName = selectedLocation.name;
-    setInputLocation(locationName);
+    const query =
+      selectedLocation.lat != null && selectedLocation.lon != null
+        ? `${selectedLocation.lat},${selectedLocation.lon}`
+        : selectedLocation.name;
+    setInputLocation(selectedLocation.name);
     setSearchResults([]);
-    await loadOutdoorData(locationName);
+    await loadOutdoorData(query);
   };
 
   const handleUseCurrentLocation = () => {
@@ -132,16 +144,47 @@ export default function OutdoorPage() {
   const aqiLabel = data
     ? gradeToKorean[data.aqi_grade] ?? data.aqi_grade
     : null;
+  const weatherSourceLabel = data?.weather_source
+    ? weatherSourceLabels[data.weather_source] ?? data.weather_source
+    : null;
+  const weatherObservedLabel = data?.weather_observed_at
+    ? new Date(data.weather_observed_at).toLocaleString('ko-KR', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
 
   return (
     <section className="outdoor-page p-6 max-w-2xl mx-auto text-white">
       <div className="mb-8">
         {data?.is_mock && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3 mb-4 text-sm text-amber-300">
-              ⚠️ 기상청/에어코리아 API 연동 전이라 <b>모의(Mock) 데이터</b>가 표시됩니다.
-              API 키 활성화 후 새로고침하면 실제 데이터로 바뀝니다.
-            </div>
-          )}
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3 mb-4 text-sm text-amber-300">
+            ⚠️ 기상청/에어코리아 API 연동 전이라 <b>모의(Mock) 데이터</b>가 표시됩니다.
+            API 키 활성화 후 새로고침하면 실제 데이터로 바뀝니다.
+          </div>
+        )}
+        {!data?.is_mock && data?.weather_description === '정보 없음' && (
+          <div className="bg-zinc-800/60 border border-zinc-700 rounded-2xl px-4 py-3 mb-4 text-sm text-zinc-400">
+            ℹ️ 기상 정보를 불러오지 못했습니다. 대기질 데이터만 표시 중일 수 있습니다.
+          </div>
+        )}
+        {!data?.is_mock && data?.weather_description && data.weather_description !== '정보 없음' && (
+          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl px-4 py-3 mb-4 text-sm text-emerald-300/80">
+            {weatherSourceLabel ? (
+              <span>기상: {weatherSourceLabel}</span>
+            ) : (
+              <span>기상: 기상청 관측 데이터</span>
+            )}
+            {data.weather_station ? ` · ${data.weather_station}` : ''}
+            {weatherObservedLabel ? ` · 관측 ${weatherObservedLabel}` : ''}
+            <span className="block mt-1 text-emerald-300/60">
+              대기질: 에어코리아 실시간 측정
+              {data?.cached ? ' · 캐시된 데이터 (새로고침으로 최신 조회)' : ''}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-3xl font-bold">실외 환경</h1>
