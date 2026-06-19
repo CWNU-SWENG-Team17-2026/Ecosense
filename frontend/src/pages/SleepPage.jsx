@@ -55,19 +55,25 @@ export default function SleepPage() {
   }, [spikes.length]);
 
   const handleStop = async () => {
-    // 수면 모드일 경우 종료 직전 분석 (sessionStartTime은 store에서 읽어옴)
-    if (mode === 'sleep' && spikes.length >= 0 && sessionStartTime) {
+  stopAudioMonitoring();
+
+  // 녹음 종료/스파이크 저장이 반영될 시간
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  const latestSpikes = useNoiseStore.getState().spikes;
+    if (mode === 'sleep' && sessionStartTime) {
       const endedAt = new Date().toISOString();
-      const result = analyzeSleep(sessionStartTime, endedAt, spikes);
+      const result = analyzeSleep(sessionStartTime, endedAt, latestSpikes);
       setAnalysisResult(result);
     }
 
-    stopAudioMonitoring();
     await uploadToServer();
+
     const [loadedSpikes, loadedRecordings] = await Promise.all([
       getSpikes(),
       getRecordings(),
     ]);
+
     setSavedSpikes(loadedSpikes);
     setRecordings(loadedRecordings);
   };
