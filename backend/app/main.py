@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ from app.routers import auth, location, outdoor, report, sessions, spikes, sync,
 from app.utils.cleanup import cleanup_expired_data
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -18,7 +20,6 @@ async def lifespan(_: FastAPI):
         from app.utils.schema import drop_all_tables
 
         if str(engine.url).startswith("postgresql"):
-            logger = __import__("logging").getLogger(__name__)
             logger.warning("RESET_DB_ON_STARTUP=true → 전체 테이블 재생성")
             drop_all_tables(engine)
 
@@ -30,13 +31,17 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_cors_kwargs: dict = {
+    "allow_origins": settings.cors_origin_list,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+if settings.cors_origin_regex_pattern:
+    _cors_kwargs["allow_origin_regex"] = settings.cors_origin_regex_pattern
+
+app.add_middleware(CORSMiddleware, **_cors_kwargs)
+logger.info("CORSMiddleware enabled: origins=%s", settings.cors_origin_list)
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(location.router, prefix="/api")

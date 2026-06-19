@@ -21,6 +21,8 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./ecosense.db"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
+    # Vercel preview URL 허용 (선택). 예: https://.*\.vercel\.app
+    cors_origin_regex: str = ""
 
     kma_api_key: str = ""
     kma_forecast_service_key: str = ""
@@ -37,8 +39,17 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        origins: list[str] = []
+        for origin in self.cors_origins.split(","):
+            normalized = origin.strip().rstrip("/")
+            if normalized and normalized not in origins:
+                origins.append(normalized)
+        return origins
 
+    @property
+    def cors_origin_regex_pattern(self) -> str | None:
+        pattern = self.cors_origin_regex.strip()
+        return pattern or None
 
 @lru_cache
 def get_settings() -> Settings:
@@ -49,4 +60,12 @@ def get_settings() -> Settings:
         logger.warning("⚠️  SECRET_KEY가 기본값입니다. 운영 전에 변경하세요.")
     if s.cookie_secure is False and not s.debug:
         logger.warning("⚠️  COOKIE_SECURE=False in production. HTTPS 환경에서는 true로 설정하세요.")
+    if not s.debug:
+        logger.info("CORS allow_origins=%s", s.cors_origin_list)
+        if s.cors_origin_regex_pattern:
+            logger.info("CORS allow_origin_regex=%s", s.cors_origin_regex_pattern)
+        if not any("vercel.app" in o for o in s.cors_origin_list) and not s.cors_origin_regex_pattern:
+            logger.warning(
+                "⚠️  CORS에 Vercel URL이 없습니다. Render에 CORS_ORIGINS=https://ecosense-sooty.vercel.app 설정 필요"
+            )
     return s
