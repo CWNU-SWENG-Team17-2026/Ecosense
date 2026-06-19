@@ -48,13 +48,25 @@ logger.info("CORSMiddleware enabled: origins=%s", settings.cors_origin_list)
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # FastAPI CORSMiddleware가 500 응답에 헤더를 빠뜨리는 경우가 있어 직접 추가
+    origin = request.headers.get("origin", "")
+    cors_headers: dict[str, str] = {}
+    if origin and origin in settings.cors_origin_list:
+        cors_headers["Access-Control-Allow-Origin"] = origin
+        cors_headers["Access-Control-Allow-Credentials"] = "true"
+
     if isinstance(exc, HTTPException):
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
+            headers=cors_headers or None,
         )
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=cors_headers or None,
+    )
 
 
 app.include_router(auth.router, prefix="/api")

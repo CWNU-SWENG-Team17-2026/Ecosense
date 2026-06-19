@@ -361,11 +361,21 @@ async def fetch_kma_weather(
     lon: float,
     forecast_service_key: str = "",
 ) -> dict[str, Any] | None:
-    """위경도 기준 기상 데이터 조회 (초단기실황 우선 → ASOS 시간관측 폴백)."""
+    """위경도 기준 기상 데이터 조회 (초단기실황 우선 → ASOS 시간관측 폴백).
+
+    초단기실황(getUltraSrtNcst)은 PTY(강수형태)만 제공하므로
+    강수 없을 때('맑음')는 단기예보(getVilageFcst) SKY 코드로 보완한다.
+    """
     service_key = _forecast_service_key(kma_api_key, forecast_service_key)
     if service_key:
         ncst = await fetch_kma_ultra_ncst(service_key, lat, lon)
         if ncst is not None:
+            # PTY=0(강수없음)이면 SKY(구름량)를 단기예보에서 보완
+            if ncst.get("weather_description") == "맑음":
+                nx, ny = latlon_to_grid(lat, lon)
+                fcst = await fetch_kma_forecast(service_key, nx, ny)
+                if fcst and fcst.get("weather_description"):
+                    ncst["weather_description"] = fcst["weather_description"]
             return ncst
 
     if not kma_api_key:

@@ -32,9 +32,13 @@ def _local_matches(keyword: str) -> list[dict[str, str | float]]:
 
 @router.get("/search")
 async def search_locations(keyword: str = Query(min_length=1)):
-    """전국 지역 검색 — OpenStreetMap 지오코딩 + 로컬 관측소/행정구역."""
-    local = _local_matches(keyword)
-    remote = await search_places(keyword, limit=8)
+    """전국 지역 검색 — 로컬 관측소/행정구역 + OpenStreetMap 지오코딩."""
+    try:
+        local = _local_matches(keyword)
+        remote = await search_places(keyword, limit=8)
+    except Exception:
+        local = _local_matches(keyword)
+        remote = []
 
     seen: set[str] = set()
     merged: list[dict[str, str | float]] = []
