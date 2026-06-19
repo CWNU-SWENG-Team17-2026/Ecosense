@@ -306,7 +306,7 @@ export default function OutdoorPage() {
             />
             <InfoCard
               title="UV"
-              value={String(data.uv_index ?? 0)}
+              value={String(data.uv_index ?? 0).toFixed(1)}
               description={getUvComment(Number(data.uv_index ?? 0))}
             />
             <InfoCard
