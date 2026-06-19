@@ -104,15 +104,6 @@ export default function OutdoorChart() {
         fill: true,
         pointRadius: displayHistory.length === 1 ? 5 : 3,
       },
-      {
-        label: '습도 (%)',
-        data: displayHistory.map((p) => p.humidity),
-        borderColor: '#60a5fa',
-        backgroundColor: 'rgba(96, 165, 250, 0.1)',
-        tension: 0.3,
-        fill: false,
-        pointRadius: displayHistory.length === 1 ? 5 : 3,
-      },
     ],
     humidity: [
       {
@@ -153,7 +144,7 @@ export default function OutdoorChart() {
   };
 
   const metrics = [
-    { key: 'temp', label: '기온/습도' },
+    { key: 'temp', label: '기온' },
     { key: 'humidity', label: '습도' },
     { key: 'pm25', label: 'PM2.5 / AQI' },
   ];
